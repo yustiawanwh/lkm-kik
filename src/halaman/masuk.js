@@ -11,7 +11,7 @@ export function renderMasuk(root) {
   function gambar() {
     const kotak = el('div', { class: 'masuk-kotak kartu' }, [
       el('div', { class: 'masuk-judul' }, 'Brantas Venture Studio'),
-      el('div', { class: 'masuk-sub' }, 'LKPD Interaktif — Kreativitas, Inovasi & Kewirausahaan'),
+      el('div', { class: 'masuk-sub' }, 'LKM Interaktif — Kreativitas, Inovasi & Kewirausahaan'),
       galat ? el('div', { class: 'masuk-galat' }, galat) : null,
 
       mode === 'daftar' ? el('div', { class: 'medan' }, [
