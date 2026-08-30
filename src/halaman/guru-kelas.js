@@ -14,7 +14,7 @@ import {
 import { daftarSusulanPenugasan, beriSusulan, cabutSusulan } from '../lib/data-susulan.js';
 import { ambilStrukturProgram } from '../lib/data-papan.js';
 import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
-import { ubahKendaliMurid } from '../lib/data-kelas.js';
+import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
 
 // ============================================================
@@ -332,6 +332,67 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     });
   }
 
+  /** Nonaktifkan atau keluarkan murid dari kelas. */
+  async function bukaDialogKeanggotaan(m) {
+    const nama = m.profil?.nama || '(tanpa nama)';
+    let jumlahKerja = 0;
+    try { jumlahKerja = await hitungPekerjaanMurid(kelasId, m.murid_id); }
+    catch (err) { roti(pesanGalat(err), 'galat'); return; }
+
+    const { tutup } = dialog({
+      judul: `Keanggotaan — ${nama}`,
+      isi: el('div', {}, [
+        jumlahKerja > 0
+          ? el('div', { class: 'panel-info', style: 'margin-bottom:14px;background:var(--kuning-lembut);border-color:transparent;color:var(--kuning-teks);' },
+              `Murid ini sudah punya ${jumlahKerja} catatan pekerjaan di kelas ini. Bila hanya berhenti mengikuti kelas, pilih Nonaktifkan agar nilainya tetap tercatat.`)
+          : el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
+              'Murid ini belum punya catatan pekerjaan di kelas ini, jadi aman dikeluarkan sepenuhnya.'),
+
+        el('div', { class: 'kartu', style: 'padding:12px;margin-bottom:10px;' }, [
+          el('div', { style: 'font-weight:600;margin-bottom:4px;' },
+            m.aktif === false ? 'Aktifkan Kembali' : 'Nonaktifkan'),
+          el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-bottom:10px;' },
+            m.aktif === false
+              ? 'Murid dapat mengakses kelas ini lagi.'
+              : 'Murid kehilangan akses ke kelas ini, tetapi seluruh nilai dan pekerjaannya tetap tersimpan dan tetap muncul di Rekap Nilai. Cocok untuk murid yang pindah di tengah semester.'),
+          el('button', {
+            class: 'tombol tombol-sekunder',
+            onclick: async () => {
+              try {
+                await ubahAktifPendaftaran(m.id, m.aktif === false);
+                tutup();
+                roti(m.aktif === false ? 'Murid diaktifkan kembali.' : 'Murid dinonaktifkan.', 'sukses');
+                await muatSemua();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, m.aktif === false ? 'Aktifkan Kembali' : 'Nonaktifkan')
+        ]),
+
+        el('div', { class: 'kartu', style: 'padding:12px;border-color:var(--merah-lembut);' }, [
+          el('div', { style: 'font-weight:600;margin-bottom:4px;color:var(--merah);' }, 'Keluarkan dari Kelas'),
+          el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-bottom:10px;' },
+            'Murid dihapus dari daftar kelas dan dari kelompoknya, serta hilang dari Rekap Nilai. ' +
+            'Cocok untuk murid yang salah masuk kelas atau akun uji coba. ' +
+            'Pekerjaannya sendiri tidak ikut terhapus — bila ia bergabung lagi dengan kode yang sama, pekerjaannya muncul kembali.'),
+          el('button', {
+            class: 'tombol tombol-bahaya',
+            onclick: async () => {
+              const ok = await konfirmasi(
+                `Keluarkan ${nama} dari kelas ini?` +
+                (jumlahKerja > 0 ? ` Ia punya ${jumlahKerja} catatan pekerjaan yang akan hilang dari Rekap Nilai.` : ''),
+                { labelYa: 'Keluarkan', labelTidak: 'Batal' });
+              if (!ok) return;
+              try {
+                await keluarkanMuridDariKelas(m.id, m.murid_id, kelasId);
+                tutup(); roti('Murid dikeluarkan dari kelas.', 'sukses'); await muatSemua();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Keluarkan dari Kelas')
+        ])
+      ])
+    });
+  }
+
   async function ubahKendali(m, kendaliBaru) {
     try {
       await ubahKendaliMurid(m.id, kendaliBaru);
@@ -367,9 +428,11 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
             el('div', { class: 'meta-baris' },
               [m.profil?.nis ? `NIS ${m.profil.nis}` : null, m.profil?.email].filter(Boolean).join(' · '))
           ]),
-          muridSudahBerkelompok(m.murid_id)
-            ? el('span', { class: 'lencana lencana-tim' }, 'Berkelompok')
-            : el('span', { class: 'lencana' }, 'Belum berkelompok'),
+          m.aktif === false
+            ? el('span', { class: 'lencana', style: 'background:var(--merah-lembut);color:var(--merah-teks);border-color:transparent;' }, 'Nonaktif')
+            : muridSudahBerkelompok(m.murid_id)
+              ? el('span', { class: 'lencana lencana-tim' }, 'Berkelompok')
+              : el('span', { class: 'lencana' }, 'Belum berkelompok'),
           el('div', { style: 'display:flex;gap:2px;' }, [
             el('button', {
               class: `tombol tombol-kecil ${m.kendali === 'aktif' || !m.kendali ? 'tombol-primer' : 'tombol-hantu'}`,
@@ -386,7 +449,8 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           ]),
           el('div', { class: 'aksi-baris' }, [
             el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogDataMurid(m) }, ikonTeks('ubah', 'Data')),
-            el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSikap(m) }, ikonTeks('catatan', 'Sikap'))
+            el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSikap(m) }, ikonTeks('catatan', 'Sikap')),
+            el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKeanggotaan(m) }, ikonTeks('keluar', 'Keanggotaan'))
           ])
         ])));
   }
