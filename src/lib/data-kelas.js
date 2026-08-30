@@ -54,7 +54,7 @@ export async function daftarMuridKelas(kelasId) {
   return ambilSemua((dari, ke) =>
     supabase
       .from('pendaftaran')
-      .select('*, profil:murid_id(id, nama, email, no_absen, nis)')
+      .select('id, murid_id, aktif, kendali, profil:murid_id(id, nama, email, no_absen, nis)')
       .eq('kelas_id', kelasId)
       .order('bergabung_pada', { ascending: true })
       .range(dari, ke)
@@ -68,6 +68,67 @@ export async function gabungKelasDenganKode(kode, muridId) {
   const { data, error } = await supabase.rpc('gabung_kelas', { p_kode: kode.trim() });
   if (error) throw error;
   return data;
+}
+
+/** Nonaktifkan/aktifkan kembali murid di kelas. Murid nonaktif kehilangan
+ *  akses ke kelas, tetapi seluruh datanya tetap utuh dan tetap tampil di
+ *  roster serta Rekap Nilai — dipakai untuk murid yang pindah di tengah
+ *  semester namun nilainya masih dibutuhkan. */
+export async function ubahAktifPendaftaran(pendaftaranId, aktif) {
+  const { error } = await supabase.from('pendaftaran').update({ aktif }).eq('id', pendaftaranId);
+  if (error) throw error;
+}
+
+/** Berapa banyak pekerjaan murid ini di kelas tsb (mandiri maupun lewat
+ *  kelompoknya). Dipakai untuk memperingatkan sebelum penghapusan. */
+export async function hitungPekerjaanMurid(kelasId, muridId) {
+  const { data: penugasanList, error: e1 } = await supabase
+    .from('penugasan').select('id').eq('kelas_id', kelasId);
+  if (e1) throw e1;
+  if (!penugasanList.length) return 0;
+  const ids = penugasanList.map(p => p.id);
+
+  const { count: mandiri, error: e2 } = await supabase
+    .from('progres_tugas').select('id', { count: 'exact', head: true })
+    .in('penugasan_id', ids).eq('murid_id', muridId);
+  if (e2) throw e2;
+
+  const { data: anggota, error: e3 } = await supabase
+    .from('anggota_kelompok').select('kelompok_id').eq('murid_id', muridId);
+  if (e3) throw e3;
+
+  let kelompokan = 0;
+  if (anggota.length) {
+    const { count, error: e4 } = await supabase
+      .from('progres_tugas').select('id', { count: 'exact', head: true })
+      .in('penugasan_id', ids).in('kelompok_id', anggota.map(a => a.kelompok_id));
+    if (e4) throw e4;
+    kelompokan = count || 0;
+  }
+  return (mandiri || 0) + kelompokan;
+}
+
+/** Keluarkan murid dari kelas sepenuhnya: lepas dari kelompok di kelas ini,
+ *  lalu hapus pendaftarannya.
+ *
+ *  Catatan: pekerjaan murid (progres_tugas, isian_lembar) TIDAK ikut
+ *  terhapus — datanya berkunci pada murid_id/penugasan_id, bukan pada
+ *  pendaftaran. Bila murid bergabung lagi dengan kode yang sama,
+ *  pekerjaannya muncul kembali. */
+export async function keluarkanMuridDariKelas(pendaftaranId, muridId, kelasId) {
+  // Lepas keanggotaan kelompok yang berada di kelas ini saja.
+  const { data: kelompokKelas, error: e1 } = await supabase
+    .from('kelompok').select('id').eq('kelas_id', kelasId);
+  if (e1) throw e1;
+  if (kelompokKelas.length) {
+    const { error: e2 } = await supabase
+      .from('anggota_kelompok').delete()
+      .eq('murid_id', muridId).in('kelompok_id', kelompokKelas.map(k => k.id));
+    if (e2) throw e2;
+  }
+
+  const { error: e3 } = await supabase.from('pendaftaran').delete().eq('id', pendaftaranId);
+  if (e3) throw e3;
 }
 
 export async function ubahKendaliMurid(pendaftaranId, kendali) {
