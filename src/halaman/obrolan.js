@@ -15,6 +15,8 @@ import {
   daftarKanal, ambilKanal, daftarPesan, kirimPesan, ubahSembunyiPesan,
   ubahTutupKanal, daftarBisu, bisukan, cabutBisu, tandaiDibaca,
   hitungBelumTerbaca, pantauPesan, ambilJamLayanan, sedangJamLayanan,
+  ambilPengaturanLampiran, lampirkanGambar, lampiranUntukPesan,
+  tinjauLampiran, hapusBerkasLampiran, urlLampiran,
   LABEL_JENIS, NAMA_HARI
 } from '../lib/data-obrolan.js';
 
@@ -23,14 +25,15 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
   let memuat = true, galat = '';
   let kanalList = [], belumTerbaca = new Map(), jamLayanan = null;
   let kanalAktif = null, pesanList = [], daftarBisuKanal = [];
+  let petaLampiran = new Map(), aturanLampiran = null, berkasTerpilih = null;
   let lepasKanal = null;
   let mengirim = false;
 
   async function muat() {
     memuat = true; render();
     try {
-      [kanalList, belumTerbaca, jamLayanan] = await Promise.all([
-        daftarKanal(), hitungBelumTerbaca(profil.id), ambilJamLayanan()
+      [kanalList, belumTerbaca, jamLayanan, aturanLampiran] = await Promise.all([
+        daftarKanal(), hitungBelumTerbaca(profil.id), ambilJamLayanan(), ambilPengaturanLampiran()
       ]);
       if (kanalId) await bukaKanal(kanalId);
     } catch (err) { galat = pesanGalat(err); }
@@ -41,19 +44,24 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
     try {
       kanalAktif = await ambilKanal(id);
       pesanList = await daftarPesan(id);
+      petaLampiran = await lampiranUntukPesan(pesanList.map(p => p.id));
       daftarBisuKanal = guru ? await daftarBisu(id) : [];
       await tandaiDibaca(id, profil.id);
       belumTerbaca.delete(id);
 
       lepasKanal?.();
       lepasKanal = pantauPesan(id,
-        async (baru) => {
-          // Muat ulang satu pesan agar data pengirimnya ikut terbawa.
+        async () => {
           pesanList = await daftarPesan(id);
+          petaLampiran = await lampiranUntukPesan(pesanList.map(p => p.id));
           await tandaiDibaca(id, profil.id);
           render(); gulirKeBawah();
         },
-        async () => { pesanList = await daftarPesan(id); render(); }
+        async () => {
+          pesanList = await daftarPesan(id);
+          petaLampiran = await lampiranUntukPesan(pesanList.map(p => p.id));
+          render();
+        }
       );
       state.pembersihHalaman = () => { lepasKanal?.(); lepasKanal = null; };
     } catch (err) { roti(pesanGalat(err), 'galat'); }
@@ -127,6 +135,7 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
         el('span', { style: 'color:var(--abu-teks-halus);font-size:11px;' }, tanggalId(p.dibuat_pada, true))
       ]),
       el('div', { class: 'pesan-isi', html: teksKeHtml(p.isi) }),
+      gambarLampiran(p),
       p.disembunyikan && guru
         ? el('div', { style: 'font-size:11px;color:var(--merah);margin-top:4px;' },
             `Disembunyikan${p.alasan_sembunyi ? ` — ${p.alasan_sembunyi}` : ''}`)
@@ -138,6 +147,114 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
         }, p.disembunyikan ? 'Tampilkan' : 'Sembunyikan')
       ]) : null
     ]);
+  }
+
+  /** Lampiran pada satu pesan, beserta status moderasinya. */
+  function gambarLampiran(p) {
+    const daftar = petaLampiran.get(p.id) || [];
+    if (daftar.length === 0) return null;
+
+    return el('div', { class: 'lampiran-pesan' }, daftar.map(l => {
+      // Berkas sudah dihapus guru — sisakan jejaknya saja.
+      if (!l.path) {
+        return el('div', { class: 'lampiran-kotak lampiran-dihapus' }, [
+          ikon('peringatan', 15),
+          el('span', {}, 'Gambar dihapus guru' + (l.alasan_tolak ? ` — ${l.alasan_tolak}` : ''))
+        ]);
+      }
+
+      const milikSaya = l.pengirim_id === profil.id;
+      const bisaLihat = l.status === 'disetujui' || milikSaya || guru;
+
+      if (!bisaLihat) {
+        return el('div', { class: 'lampiran-kotak lampiran-menunggu' }, [
+          ikon('jam', 15), el('span', {}, 'Gambar menunggu persetujuan guru')
+        ]);
+      }
+
+      const kotak = el('div', {
+        class: 'lampiran-gambar' + (l.status !== 'disetujui' ? ' lampiran-redup' : ''),
+        title: l.nama_asli || ''
+      }, 'Memuat…');
+
+      urlLampiran(l.path)
+        .then(url => {
+          isi(kotak, [el('img', { src: url, alt: l.nama_asli || 'lampiran' })]);
+          kotak.onclick = () => dialog({
+            judul: l.nama_asli || 'Gambar',
+            isi: el('img', { src: url, style: 'max-width:70vw;max-height:70vh;border-radius:var(--radius-sm);' })
+          });
+        })
+        .catch(() => isi(kotak, ['Gagal memuat']));
+
+      return el('div', {}, [
+        kotak,
+        // Penanda status untuk pengirim dan guru.
+        l.status === 'menunggu'
+          ? el('div', { class: 'lampiran-status status-menunggu' },
+              milikSaya && !guru ? 'Menunggu persetujuan guru' : 'Belum ditinjau')
+          : l.status === 'ditolak'
+            ? el('div', { class: 'lampiran-status status-ditolak' },
+                'Ditolak' + (l.alasan_tolak ? ` — ${l.alasan_tolak}` : ''))
+            : null,
+        // Alat moderasi guru.
+        guru ? el('div', { class: 'lampiran-aksi' }, [
+          l.status !== 'disetujui' ? el('button', {
+            class: 'tombol tombol-primer tombol-kecil',
+            onclick: async () => {
+              try {
+                await tinjauLampiran(l.id, 'disetujui', profil.id, null);
+                petaLampiran = await lampiranUntukPesan(pesanList.map(x => x.id));
+                render(); roti('Gambar disetujui dan kini terlihat.', 'sukses');
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Setujui') : null,
+          l.status !== 'ditolak' ? el('button', {
+            class: 'tombol tombol-sekunder tombol-kecil',
+            onclick: () => tolakLampiran(l, false)
+          }, 'Tolak') : null,
+          el('button', {
+            class: 'tombol tombol-bahaya tombol-kecil',
+            onclick: () => tolakLampiran(l, true)
+          }, 'Hapus Berkas')
+        ]) : null
+      ]);
+    }));
+  }
+
+  /** Tolak lampiran; bila hapusBerkas=true, berkasnya dihapus permanen dari
+   *  penyimpanan. Baris jejaknya tetap ada supaya tetap dapat ditelusuri. */
+  function tolakLampiran(l, hapusBerkas) {
+    const { tutup } = dialog({
+      judul: hapusBerkas ? 'Hapus Berkas Gambar' : 'Tolak Gambar',
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+          hapusBerkas
+            ? 'Berkas gambar dihapus permanen dari penyimpanan dan tidak bisa dikembalikan. Catatan siapa yang mengirim, kapan, dan siapa yang menghapus tetap tersimpan.'
+            : 'Gambar disembunyikan dari murid lain, tetapi berkasnya masih tersimpan dan bisa Anda setujui lagi nanti.'),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Alasan'),
+          el('input', { id: 'tl-alasan', placeholder: 'mis. salah kirim, tidak berkaitan pelajaran' })
+        ]),
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          el('button', {
+            class: 'tombol tombol-bahaya',
+            onclick: async () => {
+              const alasan = document.getElementById('tl-alasan').value.trim();
+              try {
+                if (hapusBerkas) await hapusBerkasLampiran(l, profil.id);
+                else await tinjauLampiran(l.id, 'ditolak', profil.id, alasan);
+                tutup();
+                petaLampiran = await lampiranUntukPesan(pesanList.map(x => x.id));
+                render();
+                roti(hapusBerkas ? 'Berkas dihapus.' : 'Gambar ditolak.', 'sukses');
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, hapusBerkas ? 'Hapus Permanen' : 'Tolak')
+        ])
+      ])
+    });
   }
 
   async function moderasiPesan(p) {
@@ -265,16 +382,25 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
   async function kirim() {
     const kotak = document.getElementById('kotak-pesan');
     const teks = kotak?.value?.trim();
-    if (!teks || mengirim) return;
-    mengirim = true;
+    // Boleh mengirim gambar tanpa teks; isi pesannya diberi penanda.
+    if ((!teks && !berkasTerpilih) || mengirim) return;
+    mengirim = true; render();
     try {
-      await kirimPesan(kanalAktif.id, profil.id, teks);
-      kotak.value = '';
+      const pesanBaru = await kirimPesan(
+        kanalAktif.id, profil.id, teks || '(melampirkan gambar)');
+      if (berkasTerpilih) {
+        await lampirkanGambar(pesanBaru.id, profil.id, berkasTerpilih, aturanLampiran?.maks_mb ?? 5);
+        berkasTerpilih = null;
+        roti('Gambar terkirim, menunggu persetujuan guru.', 'sukses');
+      }
       pesanList = await daftarPesan(kanalAktif.id);
+      petaLampiran = await lampiranUntukPesan(pesanList.map(p => p.id));
       render(); gulirKeBawah();
+      const k = document.getElementById('kotak-pesan');
+      if (k) { k.value = ''; k.focus(); }
     } catch (err) {
       roti(pesanGalat(err), 'galat');
-    } finally { mengirim = false; }
+    } finally { mengirim = false; render(); }
   }
 
   function gambarRuang() {
@@ -322,15 +448,51 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
         ? el('div', { class: 'kotak-kirim', style: 'color:var(--abu-teks);font-size:13px;' }, 'Kanal ini ditutup guru.')
         : sayaDibisukan
           ? el('div', { class: 'kotak-kirim', style: 'color:var(--merah);font-size:13px;' }, 'Anda sedang dibisukan di kanal ini.')
-          : el('div', { class: 'kotak-kirim' }, [
-              el('textarea', {
-                id: 'kotak-pesan', placeholder: 'Tulis pesan… (Enter mengirim, Shift+Enter baris baru)',
-                style: 'min-height:44px;max-height:120px;',
-                onkeydown: (e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kirim(); }
-                }
-              }),
-              el('button', { class: 'tombol tombol-primer', onclick: kirim }, 'Kirim')
+          : el('div', {}, [
+              berkasTerpilih ? el('div', { class: 'pratinjau-lampiran' }, [
+                ikon('lampiran', 15),
+                el('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' },
+                  berkasTerpilih.name),
+                el('span', { style: 'font-size:11px;color:var(--abu-teks);' },
+                  `${(berkasTerpilih.size / 1024 / 1024).toFixed(1)} MB`),
+                el('button', {
+                  class: 'tombol tombol-hantu tombol-kecil',
+                  onclick: () => { berkasTerpilih = null; render(); }
+                }, ikon('tutup', 14))
+              ]) : null,
+              el('div', { class: 'kotak-kirim' }, [
+                aturanLampiran?.aktif !== false ? el('label', {
+                  class: 'tombol tombol-sekunder tombol-kecil', style: 'cursor:pointer;flex-shrink:0;',
+                  title: 'Lampirkan gambar'
+                }, [
+                  ikon('lampiran', 16),
+                  el('input', {
+                    type: 'file', accept: 'image/*', style: 'display:none;',
+                    onchange: (e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!f) return;
+                      const maks = aturanLampiran?.maks_mb ?? 5;
+                      if (f.size > maks * 1024 * 1024) {
+                        roti(`Ukuran gambar melebihi ${maks} MB.`, 'galat'); return;
+                      }
+                      berkasTerpilih = f; render();
+                    }
+                  })
+                ]) : null,
+                el('textarea', {
+                  id: 'kotak-pesan', placeholder: 'Tulis pesan… (Enter mengirim, Shift+Enter baris baru)',
+                  style: 'min-height:44px;max-height:120px;',
+                  onkeydown: (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kirim(); }
+                  }
+                }),
+                el('button', {
+                  class: 'tombol tombol-primer', disabled: mengirim, onclick: kirim
+                }, mengirim ? 'Mengirim…' : 'Kirim')
+              ]),
+              berkasTerpilih ? el('div', { class: 'catatan-lampiran' },
+                'Gambar akan ditinjau guru dulu sebelum terlihat oleh teman sekelas.') : null
             ])
     ]);
   }

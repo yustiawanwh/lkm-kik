@@ -505,6 +505,41 @@ input[type="file"] {
   .pesan { max-width: 90%; }
 }
 
+/* ============ Lampiran gambar pada obrolan ============ */
+.lampiran-pesan { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+
+.lampiran-gambar {
+  width: 190px; max-width: 100%; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--garis); background: var(--permukaan-2);
+  min-height: 60px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--abu-teks); cursor: pointer;
+}
+.lampiran-gambar img { width: 100%; display: block; }
+.lampiran-redup { opacity: .6; border-style: dashed; }
+
+.lampiran-kotak {
+  display: flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border-radius: var(--radius-sm); font-size: 12px;
+  background: var(--permukaan-2); color: var(--abu-teks);
+  border: 1px dashed var(--garis);
+}
+.lampiran-menunggu { background: var(--kuning-lembut); color: var(--kuning-teks); border-color: transparent; }
+.lampiran-dihapus { background: var(--merah-lembut); color: var(--merah-teks); border-color: transparent; }
+
+.lampiran-status { font-size: 11px; margin-top: 4px; }
+.status-menunggu { color: var(--kuning-teks); }
+.status-ditolak { color: var(--merah-teks); }
+.lampiran-aksi { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+
+.pratinjau-lampiran {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px var(--sp-4); border-top: 1px solid var(--garis);
+  background: var(--biru-kabut); font-size: 13px;
+}
+.catatan-lampiran {
+  padding: 0 var(--sp-4) 8px; font-size: 11.5px; color: var(--abu-teks);
+}
+
 /* ============ Papan Pantau Langsung ============ */
 .tabel-pantau th, .tabel-pantau td { padding: 8px 10px; font-size: 13px; }
 .tabel-pantau th { white-space: nowrap; }

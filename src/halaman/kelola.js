@@ -3,6 +3,7 @@ import { el, isi, roti, dialog, konfirmasi } from '../lib/dom.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilSemuaPengaturan, simpanPengaturan } from '../lib/data-pengaturan.js';
+import { ujiServerSekolah, kosongkanCachePenyimpanan } from '../lib/bukti.js';
 import { daftarMapel, buatMapel, updateMapel, hapusMapel } from '../lib/data-kurikulum.js';
 
 export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' }) {
@@ -34,6 +35,8 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
     const ambang = pengaturan.ambang || { kkm: 75, hijau: 85 };
     const susulan = pengaturan.susulan || { penalti: 10 };
     const kecepatan = pengaturan.kecepatan || { durasi_target_jam: 24 };
+    const penyimpanan = pengaturan.penyimpanan || { mode: 'supabase', url: '', kirim_token: true };
+    const lampiranObrolan = pengaturan.lampiran_obrolan || { aktif: true, maks_mb: 5 };
     const jamLayanan = pengaturan.jam_layanan || { aktif: true, mulai: '07:00', selesai: '15:00', hari: [1,2,3,4,5], catatan: '' };
     const skalaHuruf = pengaturan.skala_huruf || [{ huruf: 'A', min: 90 }, { huruf: 'B', min: 80 }, { huruf: 'C', min: 70 }, { huruf: 'D', min: 60 }, { huruf: 'E', min: 0 }];
 
@@ -101,6 +104,73 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
           medanAngka('Afektif (%)', ranah.bobot?.afektif ?? 25,
             v => simpan('ranah', { ...ranah, bobot: { ...ranah.bobot, afektif: v } }))
         ])
+      ]),
+      el('div', { class: 'kartu' }, [
+        el('h3', {}, 'Penyimpanan Berkas'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 12px;' },
+          'Tempat menyimpan bukti karya dan lampiran obrolan. Server sekolah berguna untuk menghemat kuota egress Supabase gratis.'),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Tujuan Penyimpanan'),
+          el('select', {
+            id: 'py-mode',
+            onchange: (e) => simpan('penyimpanan', { ...penyimpanan, mode: e.target.value })
+              .then(kosongkanCachePenyimpanan)
+          }, [
+            el('option', { value: 'supabase', selected: penyimpanan.mode !== 'sekolah' }, 'Supabase Storage'),
+            el('option', { value: 'sekolah', selected: penyimpanan.mode === 'sekolah' }, 'Server file sekolah')
+          ])
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Alamat Server Sekolah'),
+          el('input', {
+            id: 'py-url', value: penyimpanan.url || '', placeholder: 'https://berkas.sekolah.sch.id/bvs',
+            onchange: (e) => simpan('penyimpanan', { ...penyimpanan, url: e.target.value.trim() })
+              .then(kosongkanCachePenyimpanan)
+          }),
+          el('div', { class: 'keterangan' },
+            'Aplikasi mengirim berkas dengan PUT ke alamat ini, membacanya dengan GET, dan menghapusnya dengan DELETE.')
+        ]),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:10px;' }, [
+          el('input', {
+            type: 'checkbox', checked: penyimpanan.kirim_token !== false,
+            onchange: (e) => simpan('penyimpanan', { ...penyimpanan, kirim_token: e.target.checked })
+              .then(kosongkanCachePenyimpanan)
+          }),
+          'Sertakan token pengguna saat mengunggah'
+        ]),
+        el('div', { class: 'keterangan', style: 'margin-bottom:12px;' },
+          'Token dikirim sebagai header Authorization: Bearer. Server sekolah perlu memeriksanya — tanpa pemeriksaan itu, siapa pun yang tahu alamatnya bisa mengunggah berkas ke sana.'),
+        el('button', {
+          class: 'tombol tombol-sekunder', id: 'py-uji',
+          onclick: async (e) => {
+            const tombol = e.currentTarget;
+            const url = document.getElementById('py-url').value.trim();
+            const token = penyimpanan.kirim_token !== false;
+            tombol.disabled = true; tombol.textContent = 'Menguji…';
+            try {
+              const hasil = await ujiServerSekolah(url, token);
+              roti(hasil.catatan
+                ? `Unggah & baca berhasil. ${hasil.catatan}`
+                : 'Berhasil: unggah, baca, dan hapus semuanya bekerja.', hasil.catatan ? 'info' : 'sukses');
+            } catch (err) {
+              roti(pesanGalat(err), 'galat');
+            } finally { tombol.disabled = false; tombol.textContent = 'Uji Koneksi Server'; }
+          }
+        }, 'Uji Koneksi Server')
+      ]),
+      el('div', { class: 'kartu' }, [
+        el('h3', {}, 'Lampiran Gambar di Obrolan'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 12px;' },
+          'Murid boleh melampirkan tangkapan layar saat mengalami kendala. Gambar TIDAK langsung terlihat teman sekelas — harus disetujui guru dulu. Guru juga bisa menghapus berkasnya bila melanggar ketentuan.'),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:12px;' }, [
+          el('input', {
+            type: 'checkbox', checked: lampiranObrolan.aktif !== false,
+            onchange: (e) => simpan('lampiran_obrolan', { ...lampiranObrolan, aktif: e.target.checked })
+          }),
+          'Izinkan murid melampirkan gambar'
+        ]),
+        medanAngka('Ukuran Maksimal (MB)', lampiranObrolan.maks_mb ?? 5,
+          v => simpan('lampiran_obrolan', { ...lampiranObrolan, maks_mb: v }))
       ]),
       el('div', { class: 'kartu' }, [
         el('h3', {}, 'Jam Layanan Obrolan'),

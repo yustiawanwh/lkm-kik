@@ -1,6 +1,7 @@
 // src/lib/data-obrolan.js — Obrolan kelas, kelompok, dan privat guru–murid.
 import { supabase } from './supabase.js';
 import { ambilSemua } from './query.js';
+import { unggahBukti, urlBukti, hapusBuktiDariStorage } from './bukti.js';
 
 export const LABEL_JENIS = { kelas: 'Kelas', kelompok: 'Kelompok', privat: 'Privat' };
 
@@ -130,6 +131,68 @@ export async function hitungBelumTerbaca(penggunaId) {
     }
   }
   return hasil;
+}
+
+// ============ Lampiran gambar ============
+const LAMPIRAN_BAWAAN = { aktif: true, maks_mb: 5, wajib_ditinjau: true };
+
+export async function ambilPengaturanLampiran() {
+  const { data, error } = await supabase
+    .from('pengaturan').select('nilai').eq('kunci', 'lampiran_obrolan').maybeSingle();
+  if (error) throw error;
+  return { ...LAMPIRAN_BAWAAN, ...(data?.nilai || {}) };
+}
+
+/** Lampirkan gambar pada sebuah pesan. Statusnya dipaksa 'menunggu' oleh
+ *  trigger database — murid tidak bisa meloloskan gambarnya sendiri. */
+export async function lampirkanGambar(pesanId, pengirimId, file, maksMb = 5) {
+  if (!file.type.startsWith('image/')) throw new Error('Hanya berkas gambar yang bisa dilampirkan.');
+  if (file.size > maksMb * 1024 * 1024) throw new Error(`Ukuran gambar melebihi ${maksMb} MB.`);
+  const { path, sidik } = await unggahBukti(file);
+  const { data, error } = await supabase.from('lampiran_pesan').insert({
+    pesan_id: pesanId, pengirim_id: pengirimId, path,
+    nama_asli: file.name, mime: file.type, ukuran: file.size, sidik
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+/** Ambil lampiran untuk sekumpulan pesan. RLS yang menyaring: murid lain
+ *  hanya menerima baris yang sudah disetujui. */
+export async function lampiranUntukPesan(pesanIds) {
+  if (!pesanIds.length) return new Map();
+  const { data, error } = await supabase
+    .from('lampiran_pesan').select('*').in('pesan_id', pesanIds);
+  if (error) throw error;
+  const peta = new Map();
+  for (const l of data) {
+    const arr = peta.get(l.pesan_id) || [];
+    arr.push(l); peta.set(l.pesan_id, arr);
+  }
+  return peta;
+}
+
+export async function tinjauLampiran(lampiranId, status, peninjauId, alasan) {
+  const { error } = await supabase.from('lampiran_pesan').update({
+    status, ditinjau_oleh: peninjauId, alasan_tolak: status === 'ditolak' ? (alasan || null) : null
+  }).eq('id', lampiranId);
+  if (error) throw error;
+}
+
+/** Hapus berkasnya dari storage. Baris lampirannya sengaja DIPERTAHANKAN
+ *  sebagai jejak: siapa mengirim apa, kapan, dan siapa yang menghapusnya. */
+export async function hapusBerkasLampiran(lampiran, peninjauId) {
+  if (lampiran.path) {
+    try { await hapusBuktiDariStorage(lampiran.path); } catch { /* berkas mungkin sudah hilang */ }
+  }
+  const { error } = await supabase.from('lampiran_pesan').update({
+    status: 'ditolak', path: null, dihapus_pada: new Date().toISOString(), ditinjau_oleh: peninjauId
+  }).eq('id', lampiran.id);
+  if (error) throw error;
+}
+
+export async function urlLampiran(path) {
+  return urlBukti(path);
 }
 
 // ============ Realtime ============
