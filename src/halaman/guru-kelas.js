@@ -16,7 +16,7 @@ import { ambilStrukturProgram } from '../lib/data-papan.js';
 import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
 import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
-import { bukaKanalPrivat } from '../lib/data-obrolan.js';
+import { bukaKanalPrivat, daftarKanal } from '../lib/data-obrolan.js';
 
 // ============================================================
 // DAFTAR KELAS
@@ -163,6 +163,20 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
         ])
       ])
     });
+  }
+
+  /** Kanal kelompok dibuat otomatis oleh database saat kelompok dibuat,
+   *  jadi di sini tinggal mencarinya lalu membukanya. */
+  async function bukaObrolanKelompok(k) {
+    try {
+      const semua = await daftarKanal();
+      const kanal = semua.find(x => x.jenis === 'kelompok' && x.kelompok_id === k.id);
+      if (!kanal) {
+        roti('Kanal obrolan kelompok ini belum ada. Pastikan migrasi 002000_obrolan.sql sudah dijalankan.', 'galat');
+        return;
+      }
+      navigasi(`#/obrolan/${kanal.id}`);
+    } catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 
   async function hapusKelompokDenganKonfirmasi(k) {
@@ -473,9 +487,15 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
       kelompokList.length === 0
         ? el('div', { class: 'kartu-kosong' }, 'Belum ada kelompok.')
         : el('div', { class: 'grid-kartu' }, kelompokList.map(k => el('div', { class: 'kartu' }, [
-            el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;' }, [
+            el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;' }, [
               el('h3', {}, k.nama),
-              el('button', { class: 'tombol tombol-bahaya tombol-kecil', onclick: () => hapusKelompokDenganKonfirmasi(k) }, 'Hapus')
+              el('div', { style: 'display:flex;gap:4px;' }, [
+                el('button', {
+                  class: 'tombol tombol-hantu tombol-kecil', title: 'Buka obrolan kelompok',
+                  onclick: () => bukaObrolanKelompok(k)
+                }, ikonTeks('refleksi', 'Pesan')),
+                el('button', { class: 'tombol tombol-bahaya tombol-kecil', onclick: () => hapusKelompokDenganKonfirmasi(k) }, 'Hapus')
+              ])
             ]),
             k.anggota_kelompok.length === 0
               ? el('div', { style: 'color:var(--abu-teks);font-size:13px;' }, 'Belum ada anggota.')

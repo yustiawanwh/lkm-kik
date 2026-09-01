@@ -220,7 +220,7 @@ export function gambarKesepakatan({ struktur, data, bisaEdit, onUbah, profil, an
 //                          {"min":9,"label":"Cukup"},{"min":0,"label":"Perlu Penguatan"}]}
 // }
 // Nomor butir pada "klaster"/"tambahan" memakai penomoran 1-based sesuai
-// tampilan LKPD, supaya guru bisa menyalin kunci skoring apa adanya.
+// tampilan LKM, supaya guru bisa menyalin kunci skoring apa adanya.
 const SKALA_DEFAULT = [
   { label: 'SS', nilai: 4 }, { label: 'S', nilai: 3 },
   { label: 'KS', nilai: 2 }, { label: 'TS', nilai: 1 }

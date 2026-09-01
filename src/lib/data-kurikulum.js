@@ -1,4 +1,4 @@
-// src/lib/data-kurikulum.js — Lapisan akses data untuk Fase 2 (Kurikulum & LKPD).
+// src/lib/data-kurikulum.js — Lapisan akses data untuk Fase 2 (Kurikulum & LKM).
 import { supabase } from './supabase.js';
 
 /** Ambil mata pelajaran pertama (data awal 'KIK' dari migrasi 000210). */

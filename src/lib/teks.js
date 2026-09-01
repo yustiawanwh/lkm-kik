@@ -4,7 +4,7 @@
 // 2) Hanya hasilkan tag aman: strong, em, u, ul, ol, li, p, br — tanpa atribut.
 // 3) Tidak memakai pustaka Markdown besar; pengubah kecil ditulis sendiri.
 //
-// Dipakai di: pengantar LKPD, deskripsi misi, tujuan tahap, catatan lembar,
+// Dipakai di: pengantar LKM, deskripsi misi, tujuan tahap, catatan lembar,
 // refleksi, DAN pesan diskusi kelompok (permukaan XSS baru pada KIK —
 // wajib melewati jalur yang sama, tidak boleh innerHTML mentah).
 

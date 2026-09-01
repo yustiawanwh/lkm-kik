@@ -70,6 +70,16 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
     return guru ? (k.murid?.nama || 'Murid') : 'Guru';
   }
 
+  /** Baris kedua pada daftar kanal. Tanpa ini, guru yang mengampu beberapa
+   *  kelas akan melihat "Kelompok 1" berkali-kali tanpa bisa membedakan
+   *  milik kelas mana. */
+  function ketKanal(k) {
+    const bagian = [];
+    if (k.jenis !== 'kelas' && k.kelas?.nama) bagian.push(k.kelas.nama);
+    if (k.ditutup) bagian.push('Ditutup');
+    return bagian.join(' · ');
+  }
+
   // ---------- Daftar kanal ----------
   function gambarDaftarKanal() {
     if (kanalList.length === 0) {
@@ -91,7 +101,7 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
             el('span', { class: k.jenis === 'privat' ? 'lencana' : 'lencana lencana-tim' }, LABEL_JENIS[k.jenis]),
             el('div', { class: 'isi-utama' }, [
               el('div', { class: 'judul-baris' }, namaKanal(k)),
-              k.ditutup ? el('div', { class: 'meta-baris' }, 'Ditutup') : null
+              ketKanal(k) ? el('div', { class: 'meta-baris' }, ketKanal(k)) : null
             ]),
             jumlah > 0 ? el('span', { class: 'jumlah-belum' }, String(jumlah)) : null
           ]);
@@ -279,7 +289,9 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
         el('div', {}, [
           el('div', { style: 'font-weight:650;' }, namaKanal(kanalAktif)),
           el('div', { style: 'font-size:12px;color:var(--abu-teks);' },
-            LABEL_JENIS[kanalAktif.jenis] + (kanalAktif.ditutup ? ' · Ditutup' : ''))
+            [LABEL_JENIS[kanalAktif.jenis],
+             kanalAktif.jenis !== 'kelas' ? kanalAktif.kelas?.nama : null,
+             kanalAktif.ditutup ? 'Ditutup' : null].filter(Boolean).join(' · '))
         ]),
         guru ? el('button', {
           class: 'tombol tombol-sekunder tombol-kecil', onclick: bukaDialogModerasi
