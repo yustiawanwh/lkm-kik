@@ -34,6 +34,7 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
     const ambang = pengaturan.ambang || { kkm: 75, hijau: 85 };
     const susulan = pengaturan.susulan || { penalti: 10 };
     const kecepatan = pengaturan.kecepatan || { durasi_target_jam: 24 };
+    const jamLayanan = pengaturan.jam_layanan || { aktif: true, mulai: '07:00', selesai: '15:00', hari: [1,2,3,4,5], catatan: '' };
     const skalaHuruf = pengaturan.skala_huruf || [{ huruf: 'A', min: 90 }, { huruf: 'B', min: 80 }, { huruf: 'C', min: 70 }, { huruf: 'D', min: 60 }, { huruf: 'E', min: 0 }];
 
     return el('div', { style: 'display:flex;flex-direction:column;gap:16px;max-width:640px;' }, [
@@ -99,6 +100,54 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
             v => simpan('ranah', { ...ranah, bobot: { ...ranah.bobot, psikomotor: v } })),
           medanAngka('Afektif (%)', ranah.bobot?.afektif ?? 25,
             v => simpan('ranah', { ...ranah, bobot: { ...ranah.bobot, afektif: v } }))
+        ])
+      ]),
+      el('div', { class: 'kartu' }, [
+        el('h3', {}, 'Jam Layanan Obrolan'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 12px;' },
+          'Penanda kapan guru biasanya membalas pesan. Di luar jam ini murid tetap bisa mengirim — hanya ditampilkan keterangan agar mereka tidak menunggu balasan sia-sia.'),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:12px;' }, [
+          el('input', {
+            type: 'checkbox', checked: jamLayanan.aktif !== false,
+            onchange: (e) => simpan('jam_layanan', { ...jamLayanan, aktif: e.target.checked })
+          }),
+          'Tampilkan penanda jam layanan'
+        ]),
+        el('div', { class: 'baris-medan' }, [
+          el('div', { class: 'medan' }, [
+            el('label', {}, 'Mulai'),
+            el('input', { type: 'time', value: jamLayanan.mulai || '07:00',
+              onchange: (e) => simpan('jam_layanan', { ...jamLayanan, mulai: e.target.value }) })
+          ]),
+          el('div', { class: 'medan' }, [
+            el('label', {}, 'Selesai'),
+            el('input', { type: 'time', value: jamLayanan.selesai || '15:00',
+              onchange: (e) => simpan('jam_layanan', { ...jamLayanan, selesai: e.target.value }) })
+          ])
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Hari Layanan'),
+          el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' },
+            ['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map((nama, i) => {
+              const dipilih = (jamLayanan.hari || []).includes(i);
+              return el('button', {
+                type: 'button',
+                class: `tombol tombol-kecil ${dipilih ? 'tombol-primer' : 'tombol-sekunder'}`,
+                onclick: () => {
+                  const hari = [...(jamLayanan.hari || [])];
+                  const idx = hari.indexOf(i);
+                  if (idx >= 0) hari.splice(idx, 1); else hari.push(i);
+                  hari.sort();
+                  simpan('jam_layanan', { ...jamLayanan, hari });
+                }
+              }, nama);
+            }))
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Keterangan untuk Murid'),
+          el('textarea', { style: 'min-height:60px;',
+            onchange: (e) => simpan('jam_layanan', { ...jamLayanan, catatan: e.target.value.trim() })
+          }, jamLayanan.catatan || '')
         ])
       ]),
       el('div', { class: 'kartu' }, [

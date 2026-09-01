@@ -16,6 +16,7 @@ import { ambilStrukturProgram } from '../lib/data-papan.js';
 import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
 import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
+import { bukaKanalPrivat } from '../lib/data-obrolan.js';
 
 // ============================================================
 // DAFTAR KELAS
@@ -450,6 +451,15 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           el('div', { class: 'aksi-baris' }, [
             el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogDataMurid(m) }, ikonTeks('ubah', 'Data')),
             el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSikap(m) }, ikonTeks('catatan', 'Sikap')),
+            el('button', {
+              class: 'tombol tombol-hantu tombol-kecil',
+              onclick: async () => {
+                try {
+                  const kanal = await bukaKanalPrivat(kelasId, m.murid_id);
+                  navigasi(`#/obrolan/${kanal.id}`);
+                } catch (err) { roti(pesanGalat(err), 'galat'); }
+              }
+            }, ikonTeks('refleksi', 'Pesan')),
             el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKeanggotaan(m) }, ikonTeks('keluar', 'Keanggotaan'))
           ])
         ])));

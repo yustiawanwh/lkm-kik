@@ -29,6 +29,7 @@ import { renderRekap } from './halaman/rekap.js';
 import { renderProfil } from './halaman/profil.js';
 import { renderAsesmenGuru } from './halaman/asesmen-guru.js';
 import { renderPantau } from './halaman/pantau.js';
+import { renderObrolan } from './halaman/obrolan.js';
 
 const app = document.getElementById('app');
 
@@ -76,7 +77,9 @@ const POLA_RUTE = [
   '#/murid',
   '#/kelola/mapel',
   '#/kelola',
-  '#/profil'
+  '#/profil',
+  '#/obrolan/:kanalId',
+  '#/obrolan'
 ];
 
 function haltePlaceholder(nama) {
@@ -147,6 +150,8 @@ async function route() {
     await renderLembarKerja(app, { ...konteks, penugasanId: params.penugasanId, lembarId: params.lembarId });
   } else if (pola === '#/murid/badge') {
     await renderBadgeMurid(app, konteks);
+  } else if (pola === '#/obrolan' || pola === '#/obrolan/:kanalId') {
+    await renderObrolan(app, { ...konteks, kanalId: params.kanalId || null });
   } else if (pola === '#/profil') {
     await renderProfil(app, {
       ...konteks,

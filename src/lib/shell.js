@@ -6,14 +6,16 @@ import { tukarTema, temaSaatIni } from './tema.js';
 const MENU_GURU = [
   { hash: '#/guru', label: 'Program Inkubasi', ikon: 'program' },
   { hash: '#/guru/kelas', label: 'Kelas', ikon: 'kelas' },
-  { hash: '#/guru/rekap', label: 'Rekap Nilai', ikon: 'rekap' }
+  { hash: '#/guru/rekap', label: 'Rekap Nilai', ikon: 'rekap' },
+  { hash: '#/obrolan', label: 'Obrolan', ikon: 'refleksi' }
 ];
 
 const MENU_PER_PERAN = {
   guru: MENU_GURU,
   murid: [
     { hash: '#/murid', label: 'Papan Misi', ikon: 'papan' },
-    { hash: '#/murid/badge', label: 'Lencana & XP', ikon: 'lencana' }
+    { hash: '#/murid/badge', label: 'Lencana & XP', ikon: 'lencana' },
+    { hash: '#/obrolan', label: 'Obrolan', ikon: 'refleksi' }
   ],
   // Admin melihat seluruh menu guru (RLS mengizinkan admin melakukan apa
   // pun yang bisa dilakukan guru) DITAMBAH menu khusus admin di bawahnya.
