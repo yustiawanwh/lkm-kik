@@ -356,7 +356,13 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         progres?.nilai_huruf
           ? el('span', { class: `nilai-kotak ${WARNA_HURUF[progres.nilai_huruf] || 'nilai-kuning'}`, style: 'padding:1px 8px;font-size:12px;' }, progres.nilai_huruf)
           : el('span', { class: 'lencana' }, `${t.xp} XP`)
-      ])
+      ]),
+      progres?.catatan_kembali
+        ? el('div', { class: 'tanda-dikembalikan' }, [
+            ikon('peringatan', 13),
+            el('span', {}, 'Dikembalikan guru')
+          ])
+        : null
     ]);
 
     pasangSeret({

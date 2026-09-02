@@ -14,6 +14,7 @@ import {
 } from '../lib/data-kurikulum.js';
 import { daftarBadgeProgram, buatBadge, updateBadge, hapusBadge } from '../lib/data-asesmen.js';
 import { buatPembangunLembar } from '../lib/pembangun-lembar.js';
+import { daftarPenugasanProgram, tutupSemuaPenugasanProgram } from '../lib/data-kelas.js';
 
 export async function renderProgramEditor(root, { profil, onKeluar, programId }) {
   let memuat = true;
@@ -97,11 +98,71 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
   }
 
   async function ubahTerbit() {
+    // Menerbitkan: langsung saja.
+    if (!program.terbit) {
+      try {
+        program = await updateProgram(program.id, { terbit: true });
+        roti('Program diterbitkan — kini bisa ditugaskan ke kelas.', 'sukses');
+        render();
+      } catch (err) { roti(pesanGalat(err), 'galat'); }
+      return;
+    }
+
+    // Menjadikan draf: jelaskan lebih dulu apa yang SEBENARNYA terjadi.
+    // Status draf hanya mencegah penugasan BARU; kelas yang sudah berjalan
+    // tidak terpengaruh — dulu ini tidak dijelaskan sama sekali sehingga
+    // guru mengira murid langsung berhenti melihat misinya.
+    let penugasanAktif = [];
     try {
-      program = await updateProgram(program.id, { terbit: !program.terbit });
-      roti(program.terbit ? 'Program diterbitkan — terlihat oleh murid saat ditugaskan ke kelas.' : 'Program dikembalikan ke draf.', 'sukses');
-      render();
-    } catch (err) { roti(pesanGalat(err), 'galat'); }
+      const semua = await daftarPenugasanProgram(program.id);
+      penugasanAktif = semua.filter(p => p.dibuka);
+    } catch (err) { roti(pesanGalat(err), 'galat'); return; }
+
+    if (penugasanAktif.length === 0) {
+      try {
+        program = await updateProgram(program.id, { terbit: false });
+        roti('Program dikembalikan ke draf.', 'sukses');
+        render();
+      } catch (err) { roti(pesanGalat(err), 'galat'); }
+      return;
+    }
+
+    const namaKelas = [...new Set(penugasanAktif.map(p => p.kelas?.nama).filter(Boolean))];
+    const { tutup } = dialog({
+      judul: 'Jadikan Draf',
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;background:var(--kuning-lembut);border-color:transparent;color:var(--kuning-teks);' },
+          `Program ini masih ditugaskan dan terbuka di ${namaKelas.length} kelas: ${namaKelas.join(', ')}.`),
+        el('p', {}, 'Status Draf hanya mencegah program ditugaskan ke kelas BARU. ' +
+          'Murid di kelas yang sudah berjalan tetap melihat dan bisa mengerjakan misinya.'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13.5px;' },
+          'Ini disengaja agar Anda bisa merapikan susunan program tanpa tanpa sengaja menghentikan kelas yang sedang berjalan.'),
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:16px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          el('button', {
+            class: 'tombol tombol-sekunder',
+            onclick: async () => {
+              try {
+                program = await updateProgram(program.id, { terbit: false });
+                tutup(); roti('Program jadi Draf. Kelas yang berjalan tidak terpengaruh.', 'sukses'); render();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Draf saja'),
+          el('button', {
+            class: 'tombol tombol-bahaya',
+            onclick: async () => {
+              try {
+                await tutupSemuaPenugasanProgram(program.id);
+                program = await updateProgram(program.id, { terbit: false });
+                tutup();
+                roti(`Program jadi Draf dan ${penugasanAktif.length} penugasan ditutup.`, 'sukses');
+                render();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Draf & Tutup Semua Penugasan')
+        ])
+      ])
+    });
   }
 
   // ============ Sprint (Tahap Inkubasi) ============
@@ -473,6 +534,10 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
     // Ranah disimpan terpisah selagi dialog terbuka, lalu digabungkan ke
     // kriteria saat menyimpan — supaya guru tidak perlu mengetiknya di JSON.
     const petaRanah = new Map((rubrikLama.kriteria || []).map(k => [k.nama, k.ranah || 'kognitif']));
+    // Misi mana saja yang memakai kriteria ini. Kosong = berlaku untuk semua
+    // misi (perilaku lama, agar rubrik yang sudah ada tetap jalan).
+    const petaMisi = new Map((rubrikLama.kriteria || []).map(k => [k.nama, [...(k.misi || [])]]));
+    const semuaMisi = sprints.flatMap(sp => sp.tugas.map(t => ({ kode: t.kode, judul: t.judul, tahap: sp.nomor })));
 
     function bacaKriteria() {
       try { return JSON.parse(document.getElementById('rb-kriteria')?.value || '[]'); }
@@ -492,16 +557,41 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
       isi(areaRanah, daftar.map(k => {
         const nama = k.nama || '(tanpa nama)';
         if (!petaRanah.has(nama)) petaRanah.set(nama, k.ranah || 'kognitif');
-        return el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:6px;' }, [
-          el('span', { style: 'flex:1;font-size:13px;' }, nama),
-          el('select', {
-            style: 'width:150px;flex-shrink:0;',
-            onchange: (e) => petaRanah.set(nama, e.target.value)
-          }, [
-            el('option', { value: 'kognitif', selected: petaRanah.get(nama) === 'kognitif' }, 'Kognitif'),
-            el('option', { value: 'psikomotor', selected: petaRanah.get(nama) === 'psikomotor' }, 'Psikomotor'),
-            el('option', { value: 'afektif', selected: petaRanah.get(nama) === 'afektif' }, 'Afektif')
-          ])
+        if (!petaMisi.has(nama)) petaMisi.set(nama, []);
+        const terpilih = petaMisi.get(nama);
+
+        return el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;background:var(--permukaan-2);' }, [
+          el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px;' }, [
+            el('span', { style: 'flex:1;font-size:13px;font-weight:550;' }, nama),
+            el('select', {
+              style: 'width:150px;flex-shrink:0;',
+              onchange: (e) => petaRanah.set(nama, e.target.value)
+            }, [
+              el('option', { value: 'kognitif', selected: petaRanah.get(nama) === 'kognitif' }, 'Kognitif'),
+              el('option', { value: 'psikomotor', selected: petaRanah.get(nama) === 'psikomotor' }, 'Psikomotor'),
+              el('option', { value: 'afektif', selected: petaRanah.get(nama) === 'afektif' }, 'Afektif')
+            ])
+          ]),
+          el('div', { style: 'font-size:12px;color:var(--abu-teks);margin-bottom:6px;' },
+            terpilih.length === 0
+              ? 'Berlaku untuk SEMUA misi. Klik misi tertentu agar kriteria ini hanya muncul di sana.'
+              : `Hanya muncul saat menilai: ${terpilih.join(', ')}`),
+          semuaMisi.length === 0
+            ? el('div', { style: 'font-size:12px;color:var(--abu-teks-halus);' }, 'Belum ada misi pada program ini.')
+            : el('div', { style: 'display:flex;gap:4px;flex-wrap:wrap;' }, semuaMisi.map(m => {
+                const aktif = terpilih.includes(m.kode);
+                return el('button', {
+                  type: 'button', title: `${m.judul} (Tahap ${m.tahap})`,
+                  class: `tombol tombol-kecil ${aktif ? 'tombol-primer' : 'tombol-sekunder'}`,
+                  style: 'padding:3px 9px;',
+                  onclick: () => {
+                    const arr = petaMisi.get(nama);
+                    const idx = arr.indexOf(m.kode);
+                    if (idx >= 0) arr.splice(idx, 1); else arr.push(m.kode);
+                    gambarRanah();
+                  }
+                }, m.kode);
+              }))
         ]);
       }));
     }
@@ -524,10 +614,11 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
             'Contoh: [{"nama":"Jumlah dan ragam gagasan","bagian":"D","level":{"4":"Lebih dari 10 gagasan","3":"Minimal 10 gagasan","1":"Kurang dari 10"}}]')
         ]),
         el('div', { class: 'medan' }, [
-          el('label', {}, 'Ranah Tiap Kriteria'),
+          el('label', {}, 'Ranah & Misi Tiap Kriteria'),
           el('div', { class: 'keterangan', style: 'margin:0 0 8px;' },
-            'Menentukan kriteria ini masuk nilai kognitif, psikomotor, atau afektif di Rekap Nilai. ' +
-            'Kriteria yang tidak ditandai dihitung sebagai kognitif.'),
+            'Ranah menentukan kriteria masuk nilai kognitif/psikomotor/afektif di Rekap Nilai ' +
+            '(tanpa penanda dihitung kognitif). Pemilihan misi menentukan kriteria ini muncul ' +
+            'saat menilai misi yang mana — supaya guru tidak dipaksa menilai kriteria yang tidak berkaitan.'),
           areaRanah
         ]),
         el('div', { style: 'display:flex;justify-content:space-between;gap:8px;margin-top:8px;' }, [
@@ -548,9 +639,14 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                 catch { roti('JSON kriteria tidak valid.', 'galat'); return; }
                 if (!Array.isArray(kriteria) || kriteria.length === 0) { roti('Isi minimal satu kriteria.', 'galat'); return; }
                 const skor_maks = Number(document.getElementById('rb-maks').value) || 4;
-                const kriteriaBerRanah = kriteria.map(k => ({
-                  ...k, ranah: petaRanah.get(k.nama) || k.ranah || 'kognitif'
-                }));
+                const kriteriaBerRanah = kriteria.map(k => {
+                  const misi = petaMisi.get(k.nama) || k.misi || [];
+                  const hasil = { ...k, ranah: petaRanah.get(k.nama) || k.ranah || 'kognitif' };
+                  // Kosong berarti berlaku untuk semua misi — jangan simpan
+                  // kunci kosong agar strukturnya tetap bersih.
+                  if (misi.length > 0) hasil.misi = misi; else delete hasil.misi;
+                  return hasil;
+                });
                 try {
                   program = await updateProgram(program.id, { rubrik: { skor_maks, kriteria: kriteriaBerRanah } });
                   tutup(); roti('Rubrik disimpan.', 'sukses');
@@ -722,10 +818,16 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
             el('button', { class: 'tombol tombol-sekunder', onclick: bukaDialogEditProgram }, 'Edit Detail'),
             el('button', { class: 'tombol tombol-sekunder', onclick: bukaDialogRubrik }, ikonTeks('rubrik', 'Rubrik')),
             el('button', { class: 'tombol tombol-sekunder', onclick: bukaDialogRefleksi }, ikonTeks('refleksi', 'Refleksi')),
-            el('button', {
-              class: program.terbit ? 'tombol tombol-sekunder' : 'tombol tombol-primer',
-              onclick: ubahTerbit
-            }, program.terbit ? 'Jadikan Draf' : 'Terbitkan')
+            el('div', { style: 'display:flex;flex-direction:column;align-items:flex-end;gap:4px;' }, [
+              el('button', {
+                class: program.terbit ? 'tombol tombol-sekunder' : 'tombol tombol-primer',
+                onclick: ubahTerbit
+              }, program.terbit ? 'Jadikan Draf' : 'Terbitkan'),
+              el('span', { style: 'font-size:11.5px;color:var(--abu-teks);max-width:230px;text-align:right;' },
+                program.terbit
+                  ? 'Draf hanya mencegah penugasan baru; kelas yang berjalan tidak berhenti.'
+                  : 'Perlu diterbitkan agar bisa ditugaskan ke kelas.')
+            ])
           ])
         ]),
         el('div', { class: 'deret-tab' }, [

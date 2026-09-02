@@ -580,6 +580,14 @@ input[type="file"] {
   pointer-events: none;
 }
 
+/* ============ Penanda tugas dikembalikan ============ */
+.tanda-dikembalikan {
+  display: flex; align-items: center; gap: 5px; margin-top: 8px;
+  padding: 4px 8px; border-radius: var(--radius-sm);
+  background: var(--kuning-lembut); color: var(--kuning-teks);
+  font-size: 11.5px; font-weight: 600;
+}
+
 /* ============ Seret kartu kanban ============ */
 .kartu-misi { cursor: grab; touch-action: manipulation; }
 .kartu-misi:active { cursor: grabbing; }

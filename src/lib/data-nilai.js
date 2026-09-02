@@ -52,6 +52,16 @@ export async function perbaikiNilai(progresId, nilai, umpanBalik, nilaiRubrik = 
   return data;
 }
 
+/** Kembalikan tugas ke murid disertai catatan. Bila tugas sudah terlanjur
+ *  dinilai, XP-nya ditarik lebih dulu di dalam RPC. */
+export async function kembalikanTugas(progresId, catatan, keBacklog = false) {
+  const { data, error } = await supabase.rpc('kembalikan_tugas', {
+    p_progres_id: progresId, p_catatan: catatan, p_ke_backlog: keBacklog
+  });
+  if (error) throw error;
+  return data;
+}
+
 /** Ambil rubrik program (kalau guru mendefinisikannya). */
 export async function ambilRubrikProgram(tujuanPembelajaranId) {
   const { data, error } = await supabase

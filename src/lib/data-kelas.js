@@ -211,6 +211,25 @@ export async function daftarProgramTerbit() {
   return data;
 }
 
+/** Semua penugasan yang memakai satu program, lintas kelas milik guru.
+ *  Dipakai saat menjadikan program Draf, agar guru tahu kelas mana yang
+ *  masih mengerjakannya. */
+export async function daftarPenugasanProgram(tujuanPembelajaranId) {
+  const { data, error } = await supabase
+    .from('penugasan').select('id, dibuka, tenggat, kelas:kelas_id(id, nama)')
+    .eq('tujuan_pembelajaran_id', tujuanPembelajaranId);
+  if (error) throw error;
+  return data;
+}
+
+/** Tutup seluruh penugasan sebuah program sekaligus. */
+export async function tutupSemuaPenugasanProgram(tujuanPembelajaranId) {
+  const { error } = await supabase
+    .from('penugasan').update({ dibuka: false })
+    .eq('tujuan_pembelajaran_id', tujuanPembelajaranId).eq('dibuka', true);
+  if (error) throw error;
+}
+
 export async function buatPenugasan(payload) {
   const { data, error } = await supabase.from('penugasan').insert(payload).select().single();
   if (error) throw error;

@@ -5,7 +5,7 @@ import { ikon, ikonTeks } from '../lib/ikon.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
-import { daftarAntreanPenilaian, daftarSudahDinilai, nilaiTugas, perbaikiNilai, daftarKontribusi, simpanKontribusi, ambilRubrikProgram } from '../lib/data-nilai.js';
+import { daftarAntreanPenilaian, daftarSudahDinilai, nilaiTugas, perbaikiNilai, daftarKontribusi, simpanKontribusi, ambilRubrikProgram, kembalikanTugas } from '../lib/data-nilai.js';
 import { daftarBadgeProgram, beriBadgeManual } from '../lib/data-asesmen.js';
 import { buatPanelPekerjaan } from '../lib/tampil-pekerjaan.js';
 import { daftarMuridKelas, daftarKelompok } from '../lib/data-kelas.js';
@@ -33,6 +33,54 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
     } finally {
       memuat = false; render();
     }
+  }
+
+  /** Kembalikan tugas ke murid agar bisa dikerjakan ulang. */
+  function bukaDialogKembalikan(p) {
+    const sudahDinilai = !!p.disetujui_pada;
+    const tenggatLewat = penugasan?.tenggat && new Date(penugasan.tenggat) < new Date();
+    const { tutup } = dialog({
+      judul: 'Kembalikan ke Murid',
+      isi: el('div', {}, [
+        el('div', { style: 'display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;' }, [
+          el('span', { class: 'lencana' }, p.tugas?.judul || ''),
+          el('span', { class: 'lencana' }, p.kelompok_id ? (p.kelompok?.nama || 'Kelompok') : (p.profil?.nama || 'Murid'))
+        ]),
+        sudahDinilai
+          ? el('div', { class: 'panel-info', style: 'margin-bottom:12px;background:var(--kuning-lembut);border-color:transparent;color:var(--kuning-teks);' },
+              `Tugas ini sudah dinilai (${p.nilai_huruf || '-'}, ${p.xp_diberikan} XP). Nilai dan XP-nya akan ditarik kembali, dan tugas kembali bisa dikerjakan.`)
+          : el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+              'Tugas dikembalikan ke kolom Dikerjakan. Murid melihat catatan Anda di kartu misinya.'),
+        tenggatLewat
+          ? el('div', { class: 'panel-info', style: 'margin-bottom:12px;background:var(--merah-lembut);border-color:transparent;color:var(--merah-teks);' },
+              'Tenggat penugasan ini sudah lewat, jadi murid TIDAK akan bisa menyimpan perbaikannya. Beri Susulan lebih dulu lewat halaman Kelas agar pengembalian ini berguna.')
+          : null,
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Catatan untuk Murid (wajib)'),
+          el('textarea', { id: 'kb-catatan', placeholder: 'mis. Lembar B masih kosong, mohon dilengkapi dulu sebelum diserahkan kembali.' }),
+          el('div', { class: 'keterangan' }, 'Catatan ini yang dibaca murid, jadi sebutkan apa persisnya yang perlu diperbaiki.')
+        ]),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;' }, [
+          el('input', { type: 'checkbox', id: 'kb-backlog' }),
+          el('span', { style: 'font-size:13.5px;' }, 'Kembalikan ke kolom "Belum Dikerjakan" (bukan "Dikerjakan")')
+        ]),
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          el('button', {
+            class: 'tombol tombol-bahaya',
+            onclick: async () => {
+              const catatan = document.getElementById('kb-catatan').value.trim();
+              if (!catatan) { roti('Catatan untuk murid wajib diisi.', 'galat'); return; }
+              try {
+                await kembalikanTugas(p.id, catatan, document.getElementById('kb-backlog').checked);
+                tutup(); roti('Tugas dikembalikan ke murid.', 'sukses');
+                await muatSemua();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Kembalikan')
+        ])
+      ])
+    });
   }
 
   function bukaDialogNilai(p, modePerbaikan = false) {
@@ -70,13 +118,25 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
     muatKontribusi();
 
     // ---- Rubrik (kalau program mendefinisikannya) ----
+    // Hanya kriteria yang berkaitan dengan misi INI yang ditampilkan.
+    // Kriteria tanpa daftar misi dianggap berlaku umum (mis. "Keterlibatan
+    // dan kerja sama"), sedangkan yang punya daftar hanya muncul di misi
+    // yang disebutkan — dulu semuanya muncul di setiap misi, sehingga guru
+    // dipaksa menilai kriteria yang tidak ada kaitannya.
+    const kodeMisi = (p.tugas?.kode || '').toLowerCase();
+    const kriteriaDipakai = (rubrik?.kriteria || []).filter(k => {
+      const daftar = (k.misi || []).map(x => String(x).toLowerCase());
+      return daftar.length === 0 || daftar.includes(kodeMisi);
+    });
+    const adaYangDisaring = (rubrik?.kriteria || []).length !== kriteriaDipakai.length;
+
     const areaRubrik = el('div', {});
     const skorRubrik = { ...(modePerbaikan && p.nilai_rubrik ? p.nilai_rubrik : {}) };
 
     function hitungDariRubrik() {
-      if (!rubrik) return null;
-      const maks = (rubrik.skor_maks || 4) * rubrik.kriteria.length;
-      const total = rubrik.kriteria.reduce((t, k, i) => t + (Number(skorRubrik[k.nama ?? i]) || 0), 0);
+      if (!rubrik || kriteriaDipakai.length === 0) return null;
+      const maks = (rubrik.skor_maks || 4) * kriteriaDipakai.length;
+      const total = kriteriaDipakai.reduce((t, k) => t + (Number(skorRubrik[k.nama]) || 0), 0);
       return maks > 0 ? Math.round((total / maks) * 100) : 0;
     }
 
@@ -84,10 +144,24 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
       if (!rubrik) { isi(areaRubrik, []); return; }
       const maksSkor = rubrik.skor_maks || 4;
       const nilaiHitung = hitungDariRubrik();
+
+      if (kriteriaDipakai.length === 0) {
+        isi(areaRubrik, [
+          el('div', { class: 'panel-info', style: 'margin:16px 0;background:var(--kuning-lembut);border-color:transparent;color:var(--kuning-teks);' },
+            `Tidak ada kriteria rubrik yang ditetapkan untuk misi ${p.tugas?.kode || ''}. ` +
+            'Isi nilainya secara manual, atau atur kaitan kriteria–misi lewat tombol Rubrik di Penyunting Program.')
+        ]);
+        return;
+      }
+
       isi(areaRubrik, [
-        el('div', { style: 'font-weight:700;font-size:13px;margin:16px 0 8px;' }, 'Rubrik Penilaian'),
-        ...rubrik.kriteria.map((k, i) => {
-          const kunci = k.nama ?? i;
+        el('div', { style: 'font-weight:700;font-size:13px;margin:16px 0 4px;' }, 'Rubrik Penilaian'),
+        adaYangDisaring
+          ? el('div', { style: 'font-size:12px;color:var(--abu-teks);margin-bottom:8px;' },
+              `Menampilkan ${kriteriaDipakai.length} dari ${rubrik.kriteria.length} kriteria — hanya yang berkaitan dengan misi ${p.tugas?.kode || ''}.`)
+          : null,
+        ...kriteriaDipakai.map((k, i) => {
+          const kunci = k.nama;
           const levelTersedia = Object.keys(k.level || {}).map(Number).sort((a, b) => b - a);
           return el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;' }, [
             el('div', { style: 'font-weight:600;font-size:13px;margin-bottom:2px;' },
@@ -104,7 +178,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           ]);
         }),
         el('div', { class: 'panel-info', style: 'display:flex;justify-content:space-between;align-items:center;' }, [
-          el('span', {}, `Total ${rubrik.kriteria.reduce((t, k, i) => t + (Number(skorRubrik[k.nama ?? i]) || 0), 0)} dari ${maksSkor * rubrik.kriteria.length}`),
+          el('span', {}, `Total ${kriteriaDipakai.reduce((t, k) => t + (Number(skorRubrik[k.nama]) || 0), 0)} dari ${maksSkor * kriteriaDipakai.length}`),
           el('span', { style: 'font-size:18px;font-weight:800;' }, `Nilai ${nilaiHitung}`)
         ])
       ]);
@@ -125,12 +199,12 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         buatPanelPekerjaan(p),
         areaRubrik,
         el('div', { class: 'medan', style: 'margin-top:16px;' }, [
-          el('label', {}, rubrik ? 'Nilai Akhir (dihitung dari rubrik)' : 'Nilai (0–100)'),
+          el('label', {}, (rubrik && kriteriaDipakai.length > 0) ? 'Nilai Akhir (dihitung dari rubrik)' : 'Nilai (0–100)'),
           el('input', {
             id: 'n-nilai', type: 'number', min: '0', max: '100',
-            readonly: rubrik ? true : undefined,
-            style: rubrik ? 'background:var(--netral);font-weight:700;' : '',
-            value: modePerbaikan ? (p.nilai_angka ?? 80) : (rubrik ? 0 : 80)
+            readonly: (rubrik && kriteriaDipakai.length > 0) ? true : undefined,
+            style: (rubrik && kriteriaDipakai.length > 0) ? 'background:var(--netral);font-weight:700;' : '',
+            value: modePerbaikan ? (p.nilai_angka ?? 80) : ((rubrik && kriteriaDipakai.length > 0) ? 0 : 80)
           })
         ]),
         el('div', { class: 'medan' }, [
@@ -143,15 +217,16 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           el('button', {
             class: 'tombol tombol-primer',
             onclick: async () => {
-              if (rubrik) {
-                const belum = rubrik.kriteria.filter((k, i) => !skorRubrik[k.nama ?? i]);
+              const pakaiRubrik = rubrik && kriteriaDipakai.length > 0;
+              if (pakaiRubrik) {
+                const belum = kriteriaDipakai.filter(k => !skorRubrik[k.nama]);
                 if (belum.length > 0) { roti(`Masih ada ${belum.length} kriteria rubrik yang belum dipilih.`, 'galat'); return; }
               }
-              const nilai = rubrik ? hitungDariRubrik() : Number(document.getElementById('n-nilai').value);
+              const nilai = pakaiRubrik ? hitungDariRubrik() : Number(document.getElementById('n-nilai').value);
               if (isNaN(nilai) || nilai < 0 || nilai > 100) { roti('Nilai harus 0–100.', 'galat'); return; }
               const umpan = document.getElementById('n-umpan').value.trim();
               try {
-                const rincianRubrik = rubrik ? skorRubrik : null;
+                const rincianRubrik = (rubrik && kriteriaDipakai.length > 0) ? skorRubrik : null;
                 if (modePerbaikan) await perbaikiNilai(p.id, nilai, umpan, rincianRubrik);
                 else await nilaiTugas(p.id, nilai, umpan, rincianRubrik);
                 tutup(); roti(modePerbaikan ? 'Nilai diperbaiki & XP disesuaikan.' : 'Nilai disimpan & XP diberikan.', 'sukses');
@@ -177,7 +252,10 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('div', { class: 'judul-baris' }, p.tugas?.judul),
         el('div', { class: 'meta-baris' }, `${p.kelompok?.nama || p.profil?.nama || '—'} · diserahkan ${tanggalId(p.diserahkan_pada, true)}`)
       ]),
-      el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => bukaDialogNilai(p) }, 'Beri Nilai')
+      el('div', { class: 'aksi-baris' }, [
+        el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
+        el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => bukaDialogNilai(p) }, 'Beri Nilai')
+      ])
     ])));
   }
 
@@ -189,7 +267,10 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('div', { class: 'judul-baris' }, p.tugas?.judul),
         el('div', { class: 'meta-baris' }, `${p.kelompok?.nama || p.profil?.nama || '—'} · ${p.xp_diberikan} XP${p.kena_penalti_susulan ? ' · kena penalti susulan' : ''}`)
       ]),
-      el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogNilai(p, true) }, ikonTeks('ubah', 'Perbaiki'))
+      el('div', { class: 'aksi-baris' }, [
+        el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
+        el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogNilai(p, true) }, ikonTeks('ubah', 'Perbaiki'))
+      ])
     ])));
   }
 

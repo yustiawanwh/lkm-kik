@@ -585,7 +585,9 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
 
   function gambarTabPenugasan() {
     return el('div', {}, [
-      el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:12px;' }, [
+      el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;' }, [
+        el('span', { style: 'font-size:12px;color:var(--abu-teks);max-width:520px;' },
+          'Tombol Tutup di sinilah yang menghentikan murid mengerjakan. Menjadikan program Draf hanya mencegah penugasan baru.'),
         el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => bukaDialogPenugasan(null) }, '+ Tugaskan Program')
       ]),
       penugasanList.length === 0
@@ -595,7 +597,13 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
               el('div', { class: 'judul-baris' }, p.tujuan_pembelajaran?.judul || '(program dihapus)'),
               el('div', { class: 'meta-baris' }, `Tenggat: ${tanggalId(p.tenggat, true)}`)
             ]),
-            el('span', { class: p.dibuka ? 'lencana' : 'lencana lencana-susulan', style: p.dibuka ? 'background:var(--hijau-lembut);color:#006644;' : '' }, p.dibuka ? 'Terbuka' : 'Ditutup'),
+            el('span', {
+              class: p.dibuka ? 'lencana' : 'lencana lencana-susulan',
+              style: p.dibuka ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : '',
+              title: p.dibuka
+                ? 'Murid bisa mengerjakan. Status ini terpisah dari status Terbit/Draf program.'
+                : 'Murid tidak bisa mengerjakan lagi.'
+            }, p.dibuka ? 'Terbuka' : 'Ditutup'),
             el('div', { class: 'aksi-baris' }, [
               el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => navigasi(`#/guru/pantau/${p.id}`) }, ikonTeks('papan', 'Pantau')),
               el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/nilai/${p.id}`) }, ikonTeks('nilai', 'Nilai')),
