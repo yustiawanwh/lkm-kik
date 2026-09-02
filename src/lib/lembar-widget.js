@@ -17,7 +17,7 @@ const JEDA_KETIK_MS = 500;
 
 /** Bangun elemen DOM untuk mengisi satu lembar kerja.
  *  { lembar, isian, bisaEdit, onSimpanGagal, profil, anggotaKelompok } → HTMLElement */
-export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profil, anggotaKelompok, realtime = false }) {
+export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profil, anggotaKelompok, realtime = false, tampilanGuru = false }) {
   const waktuDebounce = {};
   let saluran = null;
   let pemakaiSel = [];   // anggota lain yang sedang memegang sel
@@ -135,7 +135,11 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
     isi(wadah, [
       el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;' }, [
         el('span', { style: 'font-weight:600;font-size:13px;' }, `${lembar.judul}`),
-        !bisaEdit ? el('span', { class: 'lencana', style: 'background:var(--kuning-lembut);color:var(--kuning-teks);' }, 'Jalankan timer untuk mengisi') : null
+        // Lencana ini petunjuk untuk MURID. Di tampilan guru (dialog
+        // penilaian) tidak relevan — guru memang hanya membaca.
+        (!bisaEdit && !tampilanGuru)
+          ? el('span', { class: 'lencana', style: 'background:var(--kuning-lembut);color:var(--kuning-teks);' }, 'Jalankan timer untuk mengisi')
+          : null
       ]),
       areaKehadiran,
       gambarSesuaiTipe()

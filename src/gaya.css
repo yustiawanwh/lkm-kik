@@ -580,6 +580,13 @@ input[type="file"] {
   pointer-events: none;
 }
 
+/* ============ Judul grup pada daftar penilaian ============ */
+.judul-grup {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-weight: 650; font-size: 13.5px; color: var(--navy);
+  padding: 6px 2px 8px; border-bottom: 1px solid var(--garis); margin-bottom: 10px;
+}
+
 /* ============ Penanda tugas dikembalikan ============ */
 .tanda-dikembalikan {
   display: flex; align-items: center; gap: 5px; margin-top: 8px;

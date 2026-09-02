@@ -29,7 +29,7 @@ export function buatPanelPekerjaan(progres) {
         for (const { lembar, isian } of daftarIsian) {
           bagian.push(el('div', { class: 'kartu', style: 'padding:12px;margin-bottom:10px;background:var(--netral);' },
             isian.id
-              ? buatWidgetLembar({ lembar, isian, bisaEdit: false, profil: null, anggotaKelompok: [] }).elemen
+              ? buatWidgetLembar({ lembar, isian, bisaEdit: false, profil: null, anggotaKelompok: [], tampilanGuru: true }).elemen
               : el('div', { style: 'font-size:13px;color:var(--abu-teks);' }, `${lembar.judul} — belum diisi murid.`)
           ));
         }

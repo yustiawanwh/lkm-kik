@@ -7,7 +7,7 @@ export async function daftarAntreanPenilaian(penugasanId) {
   const baris = await ambilSemua((dari, ke) =>
     supabase
       .from('progres_tugas')
-      .select('*, tugas:tugas_id(*), profil:murid_id(nama), kelompok:kelompok_id(nama)')
+      .select('*, tugas:tugas_id(*, sprint:sprint_id(nomor)), profil:murid_id(nama, no_absen), kelompok:kelompok_id(nama)')
       .eq('penugasan_id', penugasanId)
       .eq('status', 'review')
       .order('diserahkan_pada', { ascending: true })
@@ -21,7 +21,7 @@ export async function daftarSudahDinilai(penugasanId) {
   return ambilSemua((dari, ke) =>
     supabase
       .from('progres_tugas')
-      .select('*, tugas:tugas_id(judul, kode, xp), profil:murid_id(nama), kelompok:kelompok_id(nama)')
+      .select('*, tugas:tugas_id(judul, kode, xp, urutan, sprint:sprint_id(nomor)), profil:murid_id(nama, no_absen), kelompok:kelompok_id(nama)')
       .eq('penugasan_id', penugasanId)
       .eq('status', 'selesai')
       .order('disetujui_pada', { ascending: false })

@@ -16,6 +16,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
   let memuat = true, galat = '';
   let penugasan = null, antrean = [], riwayat = [];
   let badgeList = [], muridList = [], kelompokList = [], rubrik = null;
+  let kelompokAn = 'kelompok';   // 'kelompok' | 'tugas'
   let tab = 'antrean';
 
   async function muatSemua() {
@@ -244,9 +245,89 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
     return j > 0 ? `${j} jam ${m} mnt` : `${m} mnt`;
   }
 
+  /** Urutan tugas: tahap dulu, lalu urutan di dalam tahap, lalu kodenya. */
+  function kunciUrutTugas(p) {
+    const tahap = p.tugas?.sprint?.nomor ?? 99;
+    const urut = p.tugas?.urutan ?? 99;
+    return [tahap, urut, p.tugas?.kode || ''];
+  }
+
+  /** Bandingkan angka di dalam teks secara wajar, supaya "Kelompok 10"
+   *  jatuh SETELAH "Kelompok 2", bukan sebelumnya. */
+  function bandingAlami(a, b) {
+    return String(a || '').localeCompare(String(b || ''), 'id', { numeric: true, sensitivity: 'base' });
+  }
+
+  function bandingUrut(a, b) {
+    const ka = kunciUrutTugas(a), kb = kunciUrutTugas(b);
+    return (ka[0] - kb[0]) || (ka[1] - kb[1]) || bandingAlami(ka[2], kb[2]);
+  }
+
+  /** Nama pengerjanya: kelompok untuk misi kelompok, murid untuk misi mandiri. */
+  function namaPengerja(p) {
+    if (p.kelompok_id) return p.kelompok?.nama || 'Kelompok';
+    const absen = p.profil?.no_absen ? `${p.profil.no_absen}. ` : '';
+    return absen + (p.profil?.nama || 'Murid');
+  }
+
+  /** Susun daftar menjadi kelompok-kelompok siap tampil. */
+  function susunGrup(daftar) {
+    const peta = new Map();
+    for (const p of daftar) {
+      const kunci = kelompokAn === 'kelompok' ? namaPengerja(p)
+                                              : `${p.tugas?.kode || ''} — ${p.tugas?.judul || ''}`;
+      if (!peta.has(kunci)) peta.set(kunci, []);
+      peta.get(kunci).push(p);
+    }
+
+    const grup = [...peta.entries()].map(([judul, isi]) => ({ judul, isi }));
+
+    if (kelompokAn === 'kelompok') {
+      // Antar grup: nama pengerja secara alami. Di dalam grup: urutan tugas.
+      grup.sort((a, b) => bandingAlami(a.judul, b.judul));
+      for (const g of grup) g.isi.sort(bandingUrut);
+    } else {
+      // Antar grup: urutan tugas. Di dalam grup: nama pengerja.
+      grup.sort((a, b) => bandingUrut(a.isi[0], b.isi[0]));
+      for (const g of grup) g.isi.sort((x, y) => bandingAlami(namaPengerja(x), namaPengerja(y)));
+    }
+    return grup;
+  }
+
+  function gambarPemilihKelompokan() {
+    return el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;' }, [
+      el('span', { style: 'font-size:12.5px;color:var(--abu-teks);' }, 'Kelompokkan menurut:'),
+      el('div', { style: 'display:flex;gap:4px;' }, [
+        el('button', {
+          class: `tombol tombol-kecil ${kelompokAn === 'kelompok' ? 'tombol-primer' : 'tombol-sekunder'}`,
+          onclick: () => { kelompokAn = 'kelompok'; render(); }
+        }, 'Kelompok / Murid'),
+        el('button', {
+          class: `tombol tombol-kecil ${kelompokAn === 'tugas' ? 'tombol-primer' : 'tombol-sekunder'}`,
+          onclick: () => { kelompokAn = 'tugas'; render(); }
+        }, 'Misi')
+      ])
+    ]);
+  }
+
+  /** Bungkus daftar menjadi bagian-bagian berjudul. */
+  function gambarBerGrup(daftar, gambarBaris) {
+    const grup = susunGrup(daftar);
+    return el('div', {}, [
+      gambarPemilihKelompokan(),
+      ...grup.map(g => el('div', { style: 'margin-bottom:18px;' }, [
+        el('div', { class: 'judul-grup' }, [
+          el('span', {}, g.judul),
+          el('span', { class: 'jumlah-kolom' }, String(g.isi.length))
+        ]),
+        el('div', { class: 'daftar-baris' }, g.isi.map(gambarBaris))
+      ]))
+    ]);
+  }
+
   function gambarTabAntrean() {
     if (antrean.length === 0) return el('div', { class: 'kartu-kosong' }, 'Tidak ada yang menunggu penilaian saat ini.');
-    return el('div', { class: 'daftar-baris' }, antrean.map(p => el('div', { class: 'baris-item' }, [
+    return gambarBerGrup(antrean, (p) => el('div', { class: 'baris-item' }, [
       el('span', { class: p.kelompok_id ? 'lencana lencana-tim' : 'lencana lencana-mandiri' }, p.kelompok_id ? 'Kelompok' : 'Mandiri'),
       el('div', { class: 'isi-utama' }, [
         el('div', { class: 'judul-baris' }, p.tugas?.judul),
@@ -256,12 +337,12 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
         el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => bukaDialogNilai(p) }, 'Beri Nilai')
       ])
-    ])));
+    ]));
   }
 
   function gambarTabRiwayat() {
     if (riwayat.length === 0) return el('div', { class: 'kartu-kosong' }, 'Belum ada yang dinilai.');
-    return el('div', { class: 'daftar-baris' }, riwayat.map(p => el('div', { class: 'baris-item' }, [
+    return gambarBerGrup(riwayat, (p) => el('div', { class: 'baris-item' }, [
       el('span', { class: `nilai-kotak ${WARNA_HURUF[p.nilai_huruf] || 'nilai-kuning'}` }, p.nilai_huruf || '—'),
       el('div', { class: 'isi-utama' }, [
         el('div', { class: 'judul-baris' }, p.tugas?.judul),
@@ -271,7 +352,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogNilai(p, true) }, ikonTeks('ubah', 'Perbaiki'))
       ])
-    ])));
+    ]));
   }
 
   function bukaDialogBeriLencana() {

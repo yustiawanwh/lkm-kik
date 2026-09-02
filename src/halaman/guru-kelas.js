@@ -138,6 +138,21 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
   }
 
   // ---------- Kelompok ----------
+  /** Ketua paling atas, lalu anggota menurut nomor absen menaik.
+   *  Yang belum mengisi nomor absen jatuh ke bawah, diurutkan menurut nama. */
+  function anggotaTerurut(k) {
+    return [...(k.anggota_kelompok || [])].sort((a, b) => {
+      const ketuaA = a.peran_dalam_kelompok === 'ketua' ? 0 : 1;
+      const ketuaB = b.peran_dalam_kelompok === 'ketua' ? 0 : 1;
+      if (ketuaA !== ketuaB) return ketuaA - ketuaB;
+      const na = a.profil?.no_absen, nb = b.profil?.no_absen;
+      if (na != null && nb != null) return na - nb;
+      if (na != null) return -1;
+      if (nb != null) return 1;
+      return (a.profil?.nama || '').localeCompare(b.profil?.nama || '');
+    });
+  }
+
   function muridSudahBerkelompok(muridId) {
     return kelompokList.some(k => k.anggota_kelompok.some(a => a.murid_id === muridId));
   }
@@ -499,7 +514,12 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
             ]),
             k.anggota_kelompok.length === 0
               ? el('div', { style: 'color:var(--abu-teks);font-size:13px;' }, 'Belum ada anggota.')
-              : el('div', { class: 'daftar-baris', style: 'margin-bottom:10px;' }, k.anggota_kelompok.map(a => el('div', { class: 'baris-item', style: 'padding:8px 12px;' }, [
+              : el('div', { class: 'daftar-baris', style: 'margin-bottom:10px;' }, anggotaTerurut(k).map(a => el('div', { class: 'baris-item', style: 'padding:8px 12px;' }, [
+                  el('span', {
+                    class: 'lencana',
+                    style: a.profil?.no_absen ? 'min-width:30px;justify-content:center;' : 'min-width:30px;justify-content:center;background:var(--kuning-lembut);color:var(--kuning-teks);border-color:transparent;',
+                    title: 'Nomor absen'
+                  }, a.profil?.no_absen ? String(a.profil.no_absen) : '—'),
                   el('div', { class: 'isi-utama' }, [
                     el('span', { style: 'font-weight:600;' }, a.profil?.nama || a.murid_id),
                     a.peran_dalam_kelompok === 'ketua' ? el('span', { class: 'lencana lencana-tim', style: 'margin-left:6px;' }, 'Ketua') : null

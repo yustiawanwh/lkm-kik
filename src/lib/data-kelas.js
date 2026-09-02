@@ -156,7 +156,7 @@ export async function daftarKelasMurid(muridId) {
 export async function daftarKelompok(kelasId) {
   const { data, error } = await supabase
     .from('kelompok')
-    .select('*, anggota_kelompok(*, profil:murid_id(id, nama))')
+    .select('*, anggota_kelompok(*, profil:murid_id(id, nama, no_absen))')
     .eq('kelas_id', kelasId)
     .order('dibuat_pada', { ascending: true });
   if (error) throw error;
