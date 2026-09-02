@@ -451,8 +451,10 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
           : el('div', {}, [
               berkasTerpilih ? el('div', { class: 'pratinjau-lampiran' }, [
                 ikon('lampiran', 15),
-                el('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' },
-                  berkasTerpilih.name),
+                el('span', {
+                  title: berkasTerpilih.name,
+                  style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+                }, berkasTerpilih.name),
                 el('span', { style: 'font-size:11px;color:var(--abu-teks);' },
                   `${(berkasTerpilih.size / 1024 / 1024).toFixed(1)} MB`),
                 el('button', {

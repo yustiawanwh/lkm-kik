@@ -9,6 +9,7 @@
 
 import { el } from './dom.js';
 import { atributJalur } from './jalur-sel.js';
+import { selTeks } from './sel-teks.js';
 import { ikon, ikonTeks } from './ikon.js';
 
 function getNilaiPath(obj, path) {
@@ -343,12 +344,10 @@ export function gambarMatriksTerhitung({ struktur, data, bisaEdit, onUbah, onTam
         bisaEdit && barisDinamis ? el('th', { style: 'width:32px;' }, '') : null
       ])),
       el('tbody', {}, baris.map((row, i) => el('tr', {}, [
-        ...kolom.map((k, ki) => el('td', { style: 'padding:3px;border-bottom:1px solid var(--garis-halus);' }, [
-          el('input', {
-            ...atributJalur(['baris', String(i), `k${ki}`]),
-            value: row[`k${ki}`] ?? '', disabled: !bisaEdit,
-            style: 'border:1px solid transparent;background:transparent;width:100%;',
-            oninput: (e) => onUbah(['baris', String(i), `k${ki}`], e.target.value)
+        ...kolom.map((k, ki) => el('td', { class: 'sel-tabel' }, [
+          selTeks({
+            path: ['baris', String(i), `k${ki}`],
+            nilai: row[`k${ki}`] ?? '', bisaEdit, onUbah
           })
         ])),
         ...terhitung.map(t => el('td', {

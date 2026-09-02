@@ -9,6 +9,7 @@ import { ambilLembar, ambilAtauBuatIsian, perbaruiSel, timpaData, anggotaKelompo
 import { bergabungSaluranLembar } from '../lib/realtime-lembar.js';
 import { pasangPenyiarFokus, bacaPemakaiSel, gambarJejakSel } from '../lib/jejak-sel.js';
 import { terapkanNilaiJauh, atributJalur } from '../lib/jalur-sel.js';
+import { selTeks } from '../lib/sel-teks.js';
 import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung } from '../lib/lembar-tipe-khas.js';
 import { state } from '../main.js';
 
@@ -149,15 +150,15 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
       ))),
       el('tbody', {}, baris.map((row, i) => el('tr', {}, kolom.map((k, ki) => {
         const path = ['baris', String(i), `k${ki}`];
-        return el('td', { style: 'padding:4px;border-bottom:1px solid var(--garis-halus);' }, [
-          el('input', {
-            id: idInput(path), ...atributJalur(path),
-            value: getNilaiPath(isian.data, path),
-            style: 'border:1px solid transparent;background:transparent;width:100%;',
-            oninput: (e) => ubahSel(path, e.target.value),
-            onfocus: () => fokusSel(path)
-          })
-        ]);
+        const sel = selTeks({
+          path, nilai: getNilaiPath(isian.data, path),
+          bisaEdit: !misiTertaut, onUbah: ubahSel
+        });
+        if (sel.tagName === 'TEXTAREA') {
+          sel.id = idInput(path);
+          sel.onfocus = () => fokusSel(path);
+        }
+        return el('td', { class: 'sel-tabel' }, [sel]);
       }).concat(
         lembar.baris_dinamis ? [el('td', {}, el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => hapusBaris(i) }, ikon('tutup', 14)))] : []
       ))))

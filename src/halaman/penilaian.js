@@ -167,14 +167,20 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           return el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;' }, [
             el('div', { style: 'font-weight:600;font-size:13px;margin-bottom:2px;' },
               k.nama + (k.bagian ? ` (Bagian ${k.bagian})` : '')),
-            el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;' },
+            // Deskripsi level ditampilkan UTUH dan membungkus. Dulu dipotong
+            // 28 karakter, sehingga guru justru tidak bisa membaca pembeda
+            // antar level — padahal itulah gunanya rubrik.
+            el('div', { class: 'pilihan-level' },
               levelTersedia.map(lv => {
                 const aktif = Number(skorRubrik[kunci]) === lv;
                 return el('button', {
-                  class: `tombol tombol-kecil ${aktif ? 'tombol-primer' : 'tombol-sekunder'}`,
-                  title: k.level[lv],
+                  type: 'button',
+                  class: 'level-rubrik' + (aktif ? ' level-aktif' : ''),
                   onclick: () => { skorRubrik[kunci] = lv; gambarRubrik(); }
-                }, `${lv} — ${String(k.level[lv]).slice(0, 28)}${String(k.level[lv]).length > 28 ? '…' : ''}`);
+                }, [
+                  el('span', { class: 'level-angka' }, String(lv)),
+                  el('span', { class: 'level-teks' }, String(k.level[lv]))
+                ]);
               }))
           ]);
         }),

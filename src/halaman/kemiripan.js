@@ -75,7 +75,7 @@ export async function renderKemiripan(root, { profil, onKeluar, penugasanId }) {
       .catch(() => isi(kotak, ['Gagal memuat']));
     return el('div', {}, [
       kotak,
-      el('div', { style: 'font-size:11px;color:var(--abu-teks-halus);max-width:120px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' },
+      el('div', { style: 'font-size:11px;color:var(--abu-teks-halus);max-width:120px;margin-top:4px;word-break:break-word;line-height:1.35;' },
         lampiran.profil?.nama || '')
     ]);
   }

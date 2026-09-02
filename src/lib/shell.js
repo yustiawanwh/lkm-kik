@@ -63,7 +63,7 @@ export function renderShell({ profil, judulHalaman, sub, konten, onKeluar }) {
       }, [
         el('span', { class: 'avatar-profil' }, (profil.nama || '?').trim().charAt(0).toUpperCase()),
         el('span', { style: 'min-width:0;' }, [
-          el('span', { class: 'nama-profil' }, profil.nama),
+          el('span', { class: 'nama-profil', title: profil.nama }, profil.nama),
           el('span', { class: 'peran-profil' },
             profil.peran === 'guru' ? 'Guru' : profil.peran === 'admin' ? 'Admin' : 'Murid')
         ])

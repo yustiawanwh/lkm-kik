@@ -9,6 +9,7 @@
 import { el, isi } from './dom.js';
 import { perbaruiSel, timpaData } from './data-lembar.js';
 import { atributJalur, terapkanNilaiJauh } from './jalur-sel.js';
+import { selTeks } from './sel-teks.js';
 import { bergabungSaluranLembar } from './realtime-lembar.js';
 import { pasangPenyiarFokus, bacaPemakaiSel, gambarJejakSel } from './jejak-sel.js';
 import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung } from './lembar-tipe-khas.js';
@@ -74,13 +75,8 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
         el('th', { style: 'text-align:left;padding:6px;border-bottom:2px solid var(--garis);font-size:12px;color:var(--abu-teks);' }, k)))),
       el('tbody', {}, baris.map((row, i) => el('tr', {}, kolom.map((k, ki) => {
         const path = ['baris', String(i), `k${ki}`];
-        return el('td', { style: 'padding:3px;border-bottom:1px solid var(--garis-halus);' }, [
-          el('input', {
-            ...atributJalur(path),
-            value: getNilaiPath(isian.data, path), disabled: !bisaEdit,
-            style: 'border:1px solid transparent;background:transparent;width:100%;',
-            oninput: (e) => ubahSel(path, e.target.value)
-          })
+        return el('td', { class: 'sel-tabel' }, [
+          selTeks({ path, nilai: getNilaiPath(isian.data, path), bisaEdit, onUbah: ubahSel })
         ]);
       }))))
     ]);
