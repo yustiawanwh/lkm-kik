@@ -514,21 +514,43 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
             ]),
             k.anggota_kelompok.length === 0
               ? el('div', { style: 'color:var(--abu-teks);font-size:13px;' }, 'Belum ada anggota.')
-              : el('div', { class: 'daftar-baris', style: 'margin-bottom:10px;' }, anggotaTerurut(k).map(a => el('div', { class: 'baris-item', style: 'padding:8px 12px;' }, [
-                  el('span', {
-                    class: 'lencana',
-                    style: a.profil?.no_absen ? 'min-width:30px;justify-content:center;' : 'min-width:30px;justify-content:center;background:var(--kuning-lembut);color:var(--kuning-teks);border-color:transparent;',
-                    title: 'Nomor absen'
-                  }, a.profil?.no_absen ? String(a.profil.no_absen) : '—'),
-                  el('div', { class: 'isi-utama' }, [
-                    el('span', { style: 'font-weight:600;' }, a.profil?.nama || a.murid_id),
-                    a.peran_dalam_kelompok === 'ketua' ? el('span', { class: 'lencana lencana-tim', style: 'margin-left:6px;' }, 'Ketua') : null
+              : el('div', { class: 'daftar-baris', style: 'margin-bottom:10px;' }, anggotaTerurut(k).map(a => el('div', { class: 'kartu-anggota' }, [
+                  // Baris atas: nomor absen + nama. Tombol turun ke bawah
+                  // supaya nama panjang punya ruang penuh dan tidak
+                  // bertumpuk dengan tombolnya.
+                  el('div', { class: 'anggota-kepala' }, [
+                    el('span', {
+                      class: 'lencana',
+                      style: a.profil?.no_absen
+                        ? 'min-width:30px;justify-content:center;'
+                        : 'min-width:30px;justify-content:center;background:var(--kuning-lembut);color:var(--kuning-teks);border-color:transparent;',
+                      title: 'Nomor absen'
+                    }, a.profil?.no_absen ? String(a.profil.no_absen) : '—'),
+                    el('span', { class: 'anggota-nama' }, a.profil?.nama || a.murid_id),
+                    a.peran_dalam_kelompok === 'ketua'
+                      ? el('span', { class: 'lencana lencana-tim' }, 'Ketua') : null
                   ]),
-                  el('div', { class: 'aksi-baris', style: 'opacity:1;' }, [
+                  el('div', { class: 'anggota-aksi' }, [
                     a.peran_dalam_kelompok !== 'ketua'
-                      ? el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: async () => { try { await jadikanKetua(k.id, a.id); await muatSemua(); } catch (err) { roti(pesanGalat(err), 'galat'); } } }, 'Jadikan Ketua')
+                      ? el('button', {
+                          class: 'tombol tombol-sekunder tombol-kecil',
+                          onclick: async () => {
+                            try { await jadikanKetua(k.id, a.id); await muatSemua(); }
+                            catch (err) { roti(pesanGalat(err), 'galat'); }
+                          }
+                        }, 'Jadikan Ketua')
                       : null,
-                    el('button', { class: 'tombol tombol-bahaya tombol-kecil', onclick: async () => { try { await keluarkanAnggota(a.id); roti('Anggota dikeluarkan.', 'sukses'); await muatSemua(); } catch (err) { roti(pesanGalat(err), 'galat'); } } }, 'Keluarkan')
+                    el('button', {
+                      class: 'tombol tombol-bahaya tombol-kecil',
+                      onclick: async () => {
+                        const ok = await konfirmasi(
+                          `Keluarkan ${a.profil?.nama || 'anggota ini'} dari ${k.nama}?`,
+                          { labelYa: 'Keluarkan', labelTidak: 'Batal' });
+                        if (!ok) return;
+                        try { await keluarkanAnggota(a.id); roti('Anggota dikeluarkan.', 'sukses'); await muatSemua(); }
+                        catch (err) { roti(pesanGalat(err), 'galat'); }
+                      }
+                    }, 'Keluarkan')
                   ])
                 ]))),
             el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => bukaDialogTambahAnggota(k) }, '+ Tambah Anggota')

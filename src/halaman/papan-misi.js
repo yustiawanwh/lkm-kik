@@ -1,6 +1,6 @@
 // src/halaman/papan-misi.js — Papan Misi murid: kanban per tugas, timer
 // dengan penyimpanan andal (autosave berkala + saat jeda/tutup/tab disembunyikan).
-import { el, isi, roti, dialog, tanggalId } from '../lib/dom.js';
+import { el, isi, roti, dialog, konfirmasi, tanggalId } from '../lib/dom.js';
 import { ikon, ikonTeks } from '../lib/ikon.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
@@ -252,6 +252,14 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
     }
 
     async function tandaiSelesai() {
+      // Konfirmasi wajib: penyerahan mengunci pekerjaan, dan salah tekan
+      // hanya bisa dipulihkan lewat pengembalian oleh guru.
+      const ok = await konfirmasi(
+        `Serahkan misi "${t.kode} — ${t.judul}" untuk dinilai? ` +
+        'Setelah diserahkan, Anda tidak bisa mengubah jawabannya lagi kecuali guru mengembalikannya.',
+        { labelYa: 'Ya, Serahkan', labelTidak: 'Belum, Periksa Lagi' });
+      if (!ok) return;
+
       await jedaTimer();
       if (!progres) return;
       try {
@@ -264,19 +272,29 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       } catch (err) { roti(pesanGalat(err), 'galat'); }
     }
 
-    const areaAksi = el('div', { style: 'display:flex;gap:8px;margin-top:16px;' });
+    const areaAksi = el('div', { class: 'aksi-misi' });
     const areaNilai = el('div', {});
     function gambarUlangAksi() {
       const sedangJalan = !!waktuMulaiLokal;
       const sudahDinilai = progres?.status === 'selesai';
       const sudahSelesai = progres?.status === 'review' || sudahDinilai;
       isi(areaAksi, [
-        !sudahSelesai ? el('button', {
-          class: 'tombol tombol-primer',
-          onclick: sedangJalan ? jedaTimer : mulaiTimer
-        }, sedangJalan ? ikonTeks('jeda', 'Jeda') : ikonTeks('mulai', 'Mulai Mengerjakan')) : null,
-        !sudahSelesai ? el('button', { class: 'tombol tombol-sekunder', onclick: tandaiSelesai }, 'Serahkan') : null,
-        (sudahSelesai && !sudahDinilai) ? el('span', { class: 'panel-info' }, 'Misi ini sudah diserahkan, menunggu dinilai guru.') : null
+        // Kelompok tombol kerja sehari-hari di kiri.
+        el('div', { class: 'aksi-misi-kiri' }, [
+          !sudahSelesai ? el('button', {
+            class: 'tombol tombol-primer',
+            onclick: sedangJalan ? jedaTimer : mulaiTimer
+          }, sedangJalan ? ikonTeks('jeda', 'Jeda') : ikonTeks('mulai', 'Mulai Mengerjakan')) : null
+        ]),
+        // Serahkan sengaja dipisah jauh ke kanan dan diberi warna
+        // peringatan: sekali diserahkan, murid tidak bisa mengubahnya lagi.
+        !sudahSelesai ? el('div', { class: 'aksi-misi-kanan' }, [
+          el('button', { class: 'tombol tombol-bahaya', onclick: tandaiSelesai }, 'Serahkan'),
+          el('span', { class: 'catatan-serahkan' }, 'Tidak bisa diubah lagi')
+        ]) : null,
+        (sudahSelesai && !sudahDinilai)
+          ? el('span', { class: 'panel-info', style: 'flex:1;' }, 'Misi ini sudah diserahkan, menunggu dinilai guru.')
+          : null
       ]);
       isi(areaNilai, sudahDinilai ? [
         el('div', { class: 'kartu', style: 'margin-top:12px;background:var(--netral);' }, [

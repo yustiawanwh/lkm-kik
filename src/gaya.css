@@ -580,6 +580,50 @@ input[type="file"] {
   pointer-events: none;
 }
 
+/* ============ Kartu anggota kelompok ============ */
+/* Nama di baris atas, tombol di bawahnya — nama panjang jadi punya ruang
+   penuh dan tidak lagi bertumpuk dengan tombol di sebelahnya. */
+.kartu-anggota {
+  background: var(--permukaan); border: 1px solid var(--garis);
+  border-radius: var(--radius); padding: 10px 12px;
+  transition: border-color var(--transisi);
+}
+.kartu-anggota:hover { border-color: var(--abu-teks-halus); }
+.anggota-kepala { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.anggota-nama {
+  font-weight: 600; font-size: 14px; line-height: 1.4;
+  word-break: break-word; flex: 1; min-width: 0;
+}
+.anggota-aksi {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--garis-halus);
+}
+
+/* ============ Baris aksi pada dialog misi ============ */
+.aksi-misi {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; margin-top: 16px; flex-wrap: wrap;
+}
+.aksi-misi-kiri { display: flex; gap: 8px; flex-wrap: wrap; }
+.aksi-misi-kanan {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  margin-left: auto; padding-left: 16px;
+  border-left: 1px solid var(--garis);
+}
+.catatan-serahkan { font-size: 11px; color: var(--abu-teks-halus); }
+
+@media (max-width: 560px) {
+  .aksi-misi { flex-direction: column; align-items: stretch; }
+  .aksi-misi-kiri > .tombol { width: 100%; justify-content: center; }
+  .aksi-misi-kanan {
+    margin-left: 0; padding-left: 0; padding-top: 12px;
+    border-left: none; border-top: 1px solid var(--garis);
+    align-items: stretch;
+  }
+  .aksi-misi-kanan > .tombol { width: 100%; justify-content: center; }
+  .catatan-serahkan { text-align: center; }
+}
+
 /* ============ Sel tabel lembar kerja ============ */
 /* Elemen <input> tidak pernah membungkus teks, jadi sel isian memakai
    textarea yang tumbuh mengikuti isi, dan teks biasa saat hanya-baca. */
