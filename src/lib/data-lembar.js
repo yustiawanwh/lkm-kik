@@ -53,29 +53,41 @@ export async function ambilAtauBuatIsian({ lembarKerjaId, penugasanId, milikKelo
     throw new Error('Lembar ini dikerjakan berkelompok — Anda belum tergabung di kelompok manapun pada kelas ini.');
   }
 
-  const { data: ada, error: e1 } = await supabase
-    .from('isian_lembar').select('*')
-    .eq('lembar_kerja_id', lembarKerjaId).eq('penugasan_id', penugasanId).eq(kolomPemilik, nilaiPemilik)
-    .maybeSingle();
-  if (e1) throw e1;
+  /** Ambil satu baris isian. Sengaja memakai limit(1), BUKAN maybeSingle():
+   *  maybeSingle melempar galat bila menemukan lebih dari satu baris, dan
+   *  duplikat semacam itu pernah terbentuk saat beberapa anggota kelompok
+   *  membuka lembar bersamaan. Dengan limit(1), lembar tetap bisa dibuka
+   *  walaupun kebersihan datanya belum sempurna. */
+  async function cari() {
+    const { data, error } = await supabase
+      .from('isian_lembar').select('*')
+      .eq('lembar_kerja_id', lembarKerjaId)
+      .eq('penugasan_id', penugasanId)
+      .eq(kolomPemilik, nilaiPemilik)
+      .order('diubah_pada', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return data?.[0] || null;
+  }
+
+  const ada = await cari();
   if (ada) return ada;
 
   const { data: baru, error: e2 } = await supabase
     .from('isian_lembar')
     .insert({ lembar_kerja_id: lembarKerjaId, penugasan_id: penugasanId, data: {}, [kolomPemilik]: nilaiPemilik })
     .select().single();
+
   if (e2) {
-    if (/duplicate key/i.test(e2.message)) {
-      const { data: ulang } = await supabase
-        .from('isian_lembar').select('*')
-        .eq('lembar_kerja_id', lembarKerjaId).eq('penugasan_id', penugasanId).eq(kolomPemilik, nilaiPemilik)
-        .single();
-      return ulang;
-    }
+    // Anggota lain menang balapan dan barisnya sudah terbentuk lebih dulu —
+    // dijamin batasan unik dari migrasi 002400. Ambil saja punya mereka.
+    const ulang = await cari();
+    if (ulang) return ulang;
     throw e2;
   }
   return baru;
 }
+
 
 /** Perbarui SATU sel secara atomik lewat RPC (migrasi 000700) — aman dari
  *  tabrakan saat beberapa anggota kelompok mengedit sel berbeda bersamaan. */
