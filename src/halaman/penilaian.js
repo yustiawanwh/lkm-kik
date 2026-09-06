@@ -8,6 +8,7 @@ import { ambilPenugasan } from '../lib/data-papan.js';
 import { daftarAntreanPenilaian, daftarSudahDinilai, nilaiTugas, perbaikiNilai, daftarKontribusi, simpanKontribusi, ambilRubrikProgram, kembalikanTugas } from '../lib/data-nilai.js';
 import { daftarBadgeProgram, beriBadgeManual } from '../lib/data-asesmen.js';
 import { buatPanelPekerjaan } from '../lib/tampil-pekerjaan.js';
+import { cetakPekerjaan } from '../lib/cetak.js';
 import { daftarMuridKelas, daftarKelompok } from '../lib/data-kelas.js';
 
 const WARNA_HURUF = { A: 'nilai-hijau', B: 'nilai-hijau', C: 'nilai-kuning', D: 'nilai-kuning', E: 'nilai-merah' };
@@ -17,6 +18,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
   let penugasan = null, antrean = [], riwayat = [];
   let badgeList = [], muridList = [], kelompokList = [], rubrik = null;
   let kelompokAn = 'kelompok';   // 'kelompok' | 'tugas'
+  let daftarSedangTampil = [];
   let tab = 'antrean';
 
   async function muatSemua() {
@@ -34,6 +36,44 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
     } finally {
       memuat = false; render();
     }
+  }
+
+  /** Cetak hasil pekerjaan untuk dikoreksi luring. */
+  async function jalankanCetak(daftar) {
+    if (daftar.length === 0) { roti('Tidak ada pekerjaan untuk dicetak.', 'galat'); return; }
+    const kemajuan = roti(`Menyiapkan cetak… 0 dari ${daftar.length}`, 'info', 0);
+    try {
+      await cetakPekerjaan(daftar, {
+        namaKelas: penugasan?.kelas?.nama,
+        namaProgram: penugasan?.tujuan_pembelajaran?.judul,
+        rubrik
+      }, (sudah, total) => {
+        if (kemajuan) kemajuan.textContent = `Menyiapkan cetak… ${sudah} dari ${total}`;
+      });
+      kemajuan?.remove();
+    } catch (err) {
+      kemajuan?.remove();
+      roti(pesanGalat(err), 'galat');
+    }
+  }
+
+  function bukaDialogCetak(daftarTampil) {
+    const { tutup } = dialog({
+      judul: 'Cetak untuk Koreksi Luring',
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+          'Halaman cetak memuat isi lembar kerja, bukti karya yang diunggah, dan tabel rubrik kosong untuk dicentang dengan pena. ' +
+          'Pada dialog cetak peramban, pilih tujuan "Simpan sebagai PDF" bila ingin berkas PDF.'),
+        el('div', { style: 'display:flex;flex-direction:column;gap:8px;' }, [
+          el('button', {
+            class: 'tombol tombol-primer',
+            onclick: () => { tutup(); jalankanCetak(daftarTampil); }
+          }, `Cetak semua yang tampil (${daftarTampil.length} pekerjaan)`),
+          el('div', { class: 'keterangan' },
+            'Mengikuti pengelompokan dan urutan yang sedang Anda lihat. Tiap pekerjaan dimulai di halaman baru.')
+        ])
+      ])
+    });
   }
 
   /** Kembalikan tugas ke murid agar bisa dikerjakan ulang. */
@@ -312,13 +352,19 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           class: `tombol tombol-kecil ${kelompokAn === 'tugas' ? 'tombol-primer' : 'tombol-sekunder'}`,
           onclick: () => { kelompokAn = 'tugas'; render(); }
         }, 'Misi')
-      ])
+      ]),
+      el('button', {
+        class: 'tombol tombol-sekunder tombol-kecil', style: 'margin-left:auto;',
+        onclick: () => bukaDialogCetak(daftarSedangTampil)
+      }, ikonTeks('unduh', 'Cetak / PDF'))
     ]);
   }
 
   /** Bungkus daftar menjadi bagian-bagian berjudul. */
   function gambarBerGrup(daftar, gambarBaris) {
     const grup = susunGrup(daftar);
+    // Urutan cetak mengikuti urutan yang sedang dilihat guru.
+    daftarSedangTampil = grup.flatMap(g => g.isi);
     return el('div', {}, [
       gambarPemilihKelompokan(),
       ...grup.map(g => el('div', { style: 'margin-bottom:18px;' }, [
@@ -340,6 +386,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('div', { class: 'meta-baris' }, `${p.kelompok?.nama || p.profil?.nama || '—'} · diserahkan ${tanggalId(p.diserahkan_pada, true)}`)
       ]),
       el('div', { class: 'aksi-baris' }, [
+        el('button', { class: 'tombol tombol-hantu tombol-kecil', title: 'Cetak pekerjaan ini', onclick: () => jalankanCetak([p]) }, ikonTeks('berkas', 'Cetak')),
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
         el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => bukaDialogNilai(p) }, 'Beri Nilai')
       ])
@@ -355,6 +402,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
         el('div', { class: 'meta-baris' }, `${p.kelompok?.nama || p.profil?.nama || '—'} · ${p.xp_diberikan} XP${p.kena_penalti_susulan ? ' · kena penalti susulan' : ''}`)
       ]),
       el('div', { class: 'aksi-baris' }, [
+        el('button', { class: 'tombol tombol-hantu tombol-kecil', title: 'Cetak pekerjaan ini', onclick: () => jalankanCetak([p]) }, ikonTeks('berkas', 'Cetak')),
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogKembalikan(p) }, 'Kembalikan'),
         el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogNilai(p, true) }, ikonTeks('ubah', 'Perbaiki'))
       ])

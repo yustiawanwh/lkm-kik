@@ -580,6 +580,74 @@ input[type="file"] {
   pointer-events: none;
 }
 
+/* ============ Halaman cetak (koreksi luring) ============ */
+#area-cetak { display: none; }
+.cetak-tunggu { padding: 20px; color: var(--abu-teks); }
+
+@media print {
+  /* Sembunyikan seluruh antarmuka; hanya lembar cetak yang tampil. */
+  body.sedang-cetak > *:not(#area-cetak) { display: none !important; }
+  body.sedang-cetak #area-cetak { display: block !important; }
+
+  @page { size: A4; margin: 14mm 12mm; }
+
+  body {
+    background: #fff !important; color: #000 !important;
+    font-size: 11pt; line-height: 1.4;
+  }
+
+  .cetak-sampul {
+    border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px;
+  }
+  .cetak-sampul h1 { font-size: 16pt; margin: 0 0 4px; }
+
+  /* Tiap pekerjaan mulai di halaman baru agar mudah dibagikan per murid. */
+  .cetak-bagian { break-before: page; break-inside: avoid-page; }
+  .cetak-bagian:first-of-type { break-before: auto; }
+
+  .cetak-kepala {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; border-bottom: 1px solid #000; padding-bottom: 6px; margin-bottom: 10px;
+  }
+  .cetak-judul { font-size: 13pt; font-weight: 700; }
+  .cetak-sub { font-size: 10pt; color: #333; }
+  .cetak-meta { font-size: 9pt; color: #333; text-align: right; }
+
+  .cetak-blok { margin-bottom: 12px; break-inside: avoid; }
+  .cetak-label {
+    font-weight: 700; font-size: 10.5pt; margin-bottom: 5px;
+    border-left: 3px solid #000; padding-left: 7px;
+  }
+  .cetak-kosong { font-size: 10pt; color: #555; font-style: italic; }
+
+  /* Isi lembar kerja: tampilkan sebagai teks cetak, bukan kotak isian. */
+  #area-cetak table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  #area-cetak th, #area-cetak td {
+    border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top;
+  }
+  #area-cetak th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #area-cetak .sel-teks-baca { padding: 0; white-space: pre-wrap; }
+  #area-cetak .lencana, #area-cetak .panel-info { border: 1px solid #999; background: none !important; color: #000 !important; }
+  #area-cetak input, #area-cetak textarea, #area-cetak select { display: none !important; }
+
+  .cetak-galeri { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cetak-gambar { margin: 0; width: 46%; break-inside: avoid; }
+  .cetak-gambar img { width: 100%; border: 1px solid #999; }
+  .cetak-gambar figcaption { font-size: 8pt; color: #444; margin-top: 2px; word-break: break-word; }
+  .cetak-berkas { font-size: 9pt; border: 1px dashed #999; padding: 5px 8px; }
+
+  /* Lembar koreksi tangan */
+  .cetak-koreksi { border: 1px solid #000; padding: 8px 10px; margin-top: 14px; break-inside: avoid; }
+  .cetak-tabel-rubrik { margin-bottom: 8px; }
+  .cetak-tabel-rubrik .kolom-skor { width: 34px; text-align: center; font-size: 12pt; }
+  .cetak-catatan { font-size: 10pt; margin-bottom: 8px; }
+  .garis-tulis { border-bottom: 1px solid #666; height: 18px; margin-top: 6px; }
+  .cetak-nilai-akhir {
+    display: flex; justify-content: space-between; font-size: 10.5pt;
+    font-weight: 600; margin-top: 10px;
+  }
+}
+
 /* ============ Kartu anggota kelompok ============ */
 /* Nama di baris atas, tombol di bawahnya — nama panjang jadi punya ruang
    penuh dan tidak lagi bertumpuk dengan tombol di sebelahnya. */

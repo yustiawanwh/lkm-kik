@@ -37,7 +37,10 @@ export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 /** Toast singkat. */
-export function roti(pesan, jenis = 'info') {
+/** Pesan sekilas. Mengembalikan elemennya agar pemanggil bisa memperbarui
+ *  teksnya (mis. penanda kemajuan) atau menutupnya lebih awal.
+ *  durasi 0 = menetap sampai ditutup pemanggil. */
+export function roti(pesan, jenis = 'info', durasi = 3200) {
   let wadah = $('.roti-wadah');
   if (!wadah) {
     wadah = el('div', { class: 'roti-wadah' });
@@ -45,7 +48,8 @@ export function roti(pesan, jenis = 'info') {
   }
   const node = el('div', { class: `roti roti-${jenis}` }, pesan);
   wadah.appendChild(node);
-  setTimeout(() => node.remove(), 3200);
+  if (durasi > 0) setTimeout(() => node.remove(), durasi);
+  return node;
 }
 
 /** Dialog modal generik. Mengembalikan { tutup }. */
