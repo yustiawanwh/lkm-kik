@@ -628,7 +628,28 @@ input[type="file"] {
   #area-cetak th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   #area-cetak .sel-teks-baca { padding: 0; white-space: pre-wrap; }
   #area-cetak .lencana, #area-cetak .panel-info { border: 1px solid #999; background: none !important; color: #000 !important; }
-  #area-cetak input, #area-cetak textarea, #area-cetak select { display: none !important; }
+  /* Elemen isian sudah diubah menjadi teks oleh ubahIsianJadiTeks().
+     Aturan di bawah untuk berjaga-jaga bila ada yang lolos. */
+  #area-cetak input:not([type="radio"]):not([type="checkbox"]),
+  #area-cetak textarea, #area-cetak select {
+    border: none !important; background: none !important; padding: 0 !important;
+    color: #000 !important; font-size: 10pt; width: 100% !important;
+    height: auto !important; min-height: 0 !important; resize: none;
+  }
+  #area-cetak .cetak-isian {
+    white-space: pre-wrap; word-break: break-word;
+    font-size: 10pt; line-height: 1.4; min-height: 14px;
+  }
+  #area-cetak .cetak-pilihan { font-size: 12pt; line-height: 1; }
+  #area-cetak .medan { margin-bottom: 8px; break-inside: avoid; }
+  #area-cetak .medan label {
+    display: block; font-weight: 600; font-size: 9.5pt;
+    color: #333; margin-bottom: 2px;
+  }
+  /* Isian formulir diberi garis bawah agar batas jawabannya jelas di kertas. */
+  #area-cetak .medan .cetak-isian {
+    border-bottom: 1px solid #bbb; padding-bottom: 3px; min-height: 16px;
+  }
 
   .cetak-galeri { display: flex; flex-wrap: wrap; gap: 8px; }
   .cetak-gambar { margin: 0; width: 46%; break-inside: avoid; }

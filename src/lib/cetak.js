@@ -12,6 +12,45 @@ import { isianUntukProgres } from './data-nilai.js';
 import { daftarLampiran } from './data-lampiran.js';
 import { urlBukti } from './bukti.js';
 
+/** Ubah setiap elemen isian menjadi teks biasa yang bisa dicetak.
+ *
+ *  Perlu dilakukan karena hampir semua tipe lembar (formulir, kanvas,
+ *  tahapan, instrumen, kalkulator, Likert) tetap merender <textarea>,
+ *  <input>, atau <select> walaupun sedang mode hanya-baca. Elemen semacam
+ *  itu bermasalah saat dicetak: tingginya tetap sehingga teks panjang
+ *  terpotong, dan sebagian peramban mengosongkannya sama sekali.
+ *
+ *  Mengubahnya di sini — bukan di tiap perender — membuat perbaikan ini
+ *  berlaku untuk semua tipe lembar sekaligus, termasuk tipe baru nanti. */
+function ubahIsianJadiTeks(root) {
+  for (const kotak of [...root.querySelectorAll('input, textarea, select')]) {
+    const tipe = (kotak.getAttribute('type') || '').toLowerCase();
+
+    // Pilihan bertanda: pertahankan posisinya di dalam tabel, ganti dengan
+    // simbol kotak agar jawaban Likert tetap terbaca.
+    if (tipe === 'radio' || tipe === 'checkbox') {
+      const tanda = el('span', { class: 'cetak-pilihan' }, kotak.checked ? '☑' : '☐');
+      kotak.replaceWith(tanda);
+      continue;
+    }
+
+    let nilai;
+    if (kotak.tagName === 'SELECT') {
+      nilai = kotak.options[kotak.selectedIndex]?.textContent ?? '';
+    } else {
+      nilai = kotak.value ?? '';
+    }
+
+    const teks = el('div', { class: 'cetak-isian' }, String(nilai).trim() === '' ? '—' : String(nilai));
+    // Warisi lebar agar susunan kolom tabel tidak berubah.
+    if (kotak.style.width) teks.style.width = kotak.style.width;
+    kotak.replaceWith(teks);
+  }
+
+  // Tombol dan elemen interaktif lain tidak ada gunanya di kertas.
+  for (const t of [...root.querySelectorAll('button')]) t.remove();
+}
+
 /** Muat gambar sampai benar-benar siap. Tanpa ini gambar sering kosong di
  *  hasil cetak, karena peramban mencetak sebelum unduhannya selesai. */
 function muatGambar(url) {
@@ -62,14 +101,19 @@ async function bagianSatuPekerjaan(p, rubrik) {
       bagian.push(el('div', { class: 'cetak-kosong' }, 'Misi ini tidak tertaut ke lembar kerja.'));
     } else {
       for (const { lembar, isian } of daftarIsian) {
+        let isiLembar;
+        if (isian.id) {
+          isiLembar = buatWidgetLembar({
+            lembar, isian, bisaEdit: false, profil: null,
+            anggotaKelompok: [], tampilanGuru: true
+          }).elemen;
+          ubahIsianJadiTeks(isiLembar);
+        } else {
+          isiLembar = el('div', { class: 'cetak-kosong' }, 'Belum diisi murid.');
+        }
         bagian.push(el('div', { class: 'cetak-blok' }, [
           el('div', { class: 'cetak-label' }, `${lembar.kode} — ${lembar.judul}`),
-          isian.id
-            ? buatWidgetLembar({
-                lembar, isian, bisaEdit: false, profil: null,
-                anggotaKelompok: [], tampilanGuru: true
-              }).elemen
-            : el('div', { class: 'cetak-kosong' }, 'Belum diisi murid.')
+          isiLembar
         ]));
       }
     }
