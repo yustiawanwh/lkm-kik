@@ -37,7 +37,9 @@ export async function rangkumanSejawatGuru(penugasanId) {
  *  Dipakai sebagai rujukan saat guru mencatat observasi sikap. */
 export async function sejawatMurid(kelasId, muridId) {
   const { data: penugasanList, error: e1 } = await supabase
-    .from('penugasan').select('id').eq('kelas_id', kelasId);
+    .from('penugasan')
+    .select('id, tujuan_pembelajaran:tujuan_pembelajaran_id(id, kode, judul)')
+    .eq('kelas_id', kelasId);
   if (e1) throw e1;
   if (!penugasanList.length) return [];
 
@@ -47,7 +49,12 @@ export async function sejawatMurid(kelasId, muridId) {
     .in('penugasan_id', penugasanList.map(p => p.id))
     .eq('dinilai_id', muridId);
   if (error) throw error;
-  return data;
+
+  // Lampirkan asal TP-nya. Penilaian sejawat terikat pada penugasan, jadi
+  // seorang murid bisa punya skor berbeda di TP yang berbeda — dan itu
+  // memang seharusnya terlihat terpisah, bukan dilebur jadi satu angka.
+  const petaTp = new Map(penugasanList.map(p => [p.id, p.tujuan_pembelajaran]));
+  return data.map(b => ({ ...b, tujuan_pembelajaran: petaTp.get(b.penugasan_id) || null }));
 }
 
 /** Guru: semua refleksi murid pada satu penugasan. */

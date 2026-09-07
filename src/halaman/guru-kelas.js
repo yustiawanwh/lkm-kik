@@ -298,7 +298,9 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     const areaRujukan = el('div', {});
     sejawatMurid(kelasId, m.murid_id)
       .then(baris => isi(areaRujukan, [
-        panelRujukanSejawat([{ nama: m.profil?.nama || 'Murid', baris }])
+        // perTp: skor sejawat terikat penugasan, jadi wajar berbeda antar TP.
+        // Dipecah agar guru tidak salah menyimpulkan dari rata-rata gabungan.
+        panelRujukanSejawat([{ nama: m.profil?.nama || 'Murid', baris }], { perTp: true })
       ]))
       .catch(() => { /* rujukan bersifat opsional */ });
 
