@@ -17,7 +17,7 @@ import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
 import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
 import { bukaKanalPrivat, daftarKanal } from '../lib/data-obrolan.js';
-import { sejawatMurid } from '../lib/data-asesmen.js';
+import { sejawatMurid, riwayatSikapMurid, updateObservasiSikap, hapusObservasiSikap } from '../lib/data-asesmen.js';
 import { panelRujukanSejawat } from '../lib/rujukan-sejawat.js';
 
 // ============================================================
@@ -292,65 +292,6 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 
-  function bukaDialogSikap(m) {
-    // Rujukan nilai rekan dimuat setelah dialog terbuka agar tidak menunda
-    // tampilnya formulir.
-    const areaRujukan = el('div', {});
-    sejawatMurid(kelasId, m.murid_id)
-      .then(baris => isi(areaRujukan, [
-        // perTp: skor sejawat terikat penugasan, jadi wajar berbeda antar TP.
-        // Dipecah agar guru tidak salah menyimpulkan dari rata-rata gabungan.
-        panelRujukanSejawat([{ nama: m.profil?.nama || 'Murid', baris }], { perTp: true })
-      ]))
-      .catch(() => { /* rujukan bersifat opsional */ });
-
-    const { tutup } = dialog({
-      judul: `Observasi Sikap — ${m.profil?.nama}`,
-      isi: el('div', {}, [
-        ...INDIKATOR_SIKAP.map(ind => el('div', { class: 'medan' }, [
-          el('label', {}, ind.label),
-          el('select', { id: `sk-${ind.key}` }, [1, 2, 3, 4, 5].map(n => el('option', { value: n, selected: n === 4 }, String(n))))
-        ])),
-        areaRujukan,
-        el('div', { class: 'medan' }, [
-          el('label', {}, 'Berlaku untuk'),
-          el('select', { id: 'sk-tp' }, [
-            el('option', { value: '' }, 'Umum — semua TP'),
-            ...[...new Map(penugasanList
-                .filter(p => p.tujuan_pembelajaran)
-                .map(p => [p.tujuan_pembelajaran.id, p.tujuan_pembelajaran])).values()]
-              .map(tp => el('option', { value: tp.id }, `${tp.kode ? tp.kode + ' — ' : ''}${tp.judul}`))
-          ]),
-          el('div', { class: 'keterangan' },
-            'Pilih TP bila sikap ini teramati pada unit tertentu. "Umum" selalu ikut dihitung pada TP mana pun.')
-        ]),
-        el('div', { class: 'medan' }, [
-          el('label', {}, 'Catatan (opsional)'),
-          el('textarea', { id: 'sk-catatan' })
-        ]),
-        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:8px;' }, [
-          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
-          el('button', {
-            class: 'tombol tombol-primer',
-            onclick: async () => {
-              const skor = {};
-              for (const ind of INDIKATOR_SIKAP) skor[ind.key] = Number(document.getElementById(`sk-${ind.key}`).value);
-              const catatan = document.getElementById('sk-catatan').value.trim();
-              try {
-                const tpDipilih = document.getElementById('sk-tp')?.value || null;
-                await simpanObservasiSikap({
-                  kelasId, muridId: m.murid_id, guruId: profil.id, skor, catatan,
-                  tujuanPembelajaranId: tpDipilih
-                });
-                tutup(); roti('Observasi sikap tersimpan.', 'sukses');
-              } catch (err) { roti(pesanGalat(err), 'galat'); }
-            }
-          }, 'Simpan')
-        ])
-      ])
-    });
-  }
-
   function bukaDialogDataMurid(m) {
     const { tutup } = dialog({
       judul: 'Data Murid',
@@ -392,7 +333,6 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     });
   }
 
-  /** Nonaktifkan atau keluarkan murid dari kelas. */
   async function bukaDialogKeanggotaan(m) {
     const nama = m.profil?.nama || '(tanpa nama)';
     let jumlahKerja = 0;
@@ -451,6 +391,167 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
         ])
       ])
     });
+  }
+
+  async function bukaDialogSikap(m) {
+    // Observasi sikap adalah CATATAN BERULANG: guru bisa mengamati murid
+    // beberapa kali sepanjang semester, dan semuanya dirata-rata di Rekap.
+    // Karena itu formulir ini memuat catatan terakhir untuk disunting —
+    // dulu selalu mulai dari nilai bawaan 4 dan selalu membuat baris baru,
+    // sehingga koreksi guru justru menambah data alih-alih menggantikannya.
+    let riwayat = [];
+    try { riwayat = await riwayatSikapMurid(kelasId, m.murid_id); }
+    catch (err) { roti(pesanGalat(err), 'galat'); return; }
+
+    const daftarTp = [...new Map(penugasanList
+      .filter(p => p.tujuan_pembelajaran)
+      .map(p => [p.tujuan_pembelajaran.id, p.tujuan_pembelajaran])).values()];
+
+    let tpTerpilih = riwayat[0]?.tujuan_pembelajaran_id || '';
+    let sedangSunting = riwayat.find(r => (r.tujuan_pembelajaran_id || '') === tpTerpilih) || null;
+
+    const wadah = el('div', {});
+    const { tutup } = dialog({ judul: `Observasi Sikap — ${m.profil?.nama || 'Murid'}`, isi: wadah });
+
+    function catatanUntukTp(tpId) {
+      return riwayat.find(r => (r.tujuan_pembelajaran_id || '') === (tpId || '')) || null;
+    }
+
+    async function segarkan() {
+      riwayat = await riwayatSikapMurid(kelasId, m.murid_id);
+      sedangSunting = catatanUntukTp(tpTerpilih);
+      gambar();
+    }
+
+    function bacaSkor() {
+      const skor = {};
+      for (const ind of INDIKATOR_SIKAP) {
+        skor[ind.key] = Number(document.getElementById(`sk-${ind.key}`).value);
+      }
+      return skor;
+    }
+
+    function gambar() {
+      const areaRujukan = el('div', {});
+      sejawatMurid(kelasId, m.murid_id)
+        .then(baris => isi(areaRujukan, [
+          panelRujukanSejawat([{ nama: m.profil?.nama || 'Murid', baris }], { perTp: true })
+        ]))
+        .catch(() => { /* rujukan bersifat opsional */ });
+
+      const lain = riwayat.filter(r => r.id !== sedangSunting?.id);
+
+      isi(wadah, [
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Berlaku untuk'),
+          el('select', {
+            id: 'sk-tp',
+            onchange: (e) => { tpTerpilih = e.target.value; sedangSunting = catatanUntukTp(tpTerpilih); gambar(); }
+          }, [
+            el('option', { value: '', selected: tpTerpilih === '' }, 'Umum — semua TP'),
+            ...daftarTp.map(tp => el('option', { value: tp.id, selected: tp.id === tpTerpilih },
+              `${tp.kode ? tp.kode + ' — ' : ''}${tp.judul}`))
+          ]),
+          el('div', { class: 'keterangan' },
+            'Tiap TP punya catatannya sendiri. "Umum" selalu ikut dihitung pada TP mana pun.')
+        ]),
+
+        sedangSunting
+          ? el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+              `Menyunting catatan yang dibuat ${tanggalId(sedangSunting.dibuat_pada, true)}. ` +
+              'Menyimpan akan MENGGANTI catatan ini, bukan menambah yang baru.')
+          : el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+              'Belum ada catatan sikap untuk pilihan ini. Menyimpan akan membuat catatan baru.'),
+
+        ...INDIKATOR_SIKAP.map(ind => el('div', { class: 'medan' }, [
+          el('label', {}, ind.label),
+          el('select', { id: `sk-${ind.key}` }, [1, 2, 3, 4, 5].map(n => {
+            const nilaiLama = Number(sedangSunting?.skor?.[ind.key]);
+            const terpilih = Number.isFinite(nilaiLama) ? nilaiLama : 4;
+            return el('option', { value: n, selected: n === terpilih }, String(n));
+          }))
+        ])),
+
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Catatan (opsional)'),
+          el('textarea', { id: 'sk-catatan' }, sedangSunting?.catatan || '')
+        ]),
+
+        areaRujukan,
+
+        lain.length > 0
+          ? el('details', { class: 'rujukan-sejawat' }, [
+              el('summary', {}, `Catatan lain murid ini (${lain.length})`),
+              el('div', { style: 'display:flex;flex-direction:column;gap:6px;margin-top:8px;' },
+                lain.map(r => el('div', { class: 'baris-sejawat' }, [
+                  el('div', { style: 'display:flex;justify-content:space-between;gap:8px;align-items:baseline;' }, [
+                    el('span', { style: 'font-weight:600;font-size:12.5px;' },
+                      r.tujuan_pembelajaran ? (r.tujuan_pembelajaran.kode || r.tujuan_pembelajaran.judul) : 'Umum'),
+                    el('span', { style: 'font-size:11.5px;color:var(--abu-teks-halus);' }, tanggalId(r.dibuat_pada, true))
+                  ]),
+                  el('div', { style: 'font-size:12px;color:var(--abu-teks);margin-top:2px;' },
+                    INDIKATOR_SIKAP.map(i => `${i.label} ${r.skor?.[i.key] ?? '-'}`).join(' · ')),
+                  r.catatan ? el('div', { class: 'komentar-sejawat' }, r.catatan) : null,
+                  el('button', {
+                    class: 'tombol tombol-bahaya tombol-kecil', style: 'margin-top:6px;',
+                    onclick: async () => {
+                      const ok = await konfirmasi('Hapus catatan sikap ini? Rata-rata afektif murid akan ikut berubah.',
+                        { labelYa: 'Hapus', labelTidak: 'Batal' });
+                      if (!ok) return;
+                      try { await hapusObservasiSikap(r.id); roti('Catatan dihapus.', 'sukses'); await segarkan(); await muatSemua(); }
+                      catch (err) { roti(pesanGalat(err), 'galat'); }
+                    }
+                  }, 'Hapus')
+                ])))
+            ])
+          : null,
+
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          sedangSunting
+            ? el('button', {
+                class: 'tombol tombol-hantu',
+                title: 'Simpan sebagai pengamatan terpisah, bukan mengganti yang lama',
+                onclick: async () => {
+                  try {
+                    await simpanObservasiSikap({
+                      kelasId, muridId: m.murid_id, guruId: profil.id,
+                      skor: bacaSkor(), catatan: document.getElementById('sk-catatan').value.trim(),
+                      tujuanPembelajaranId: tpTerpilih || null
+                    });
+                    roti('Catatan baru ditambahkan.', 'sukses');
+                    await segarkan(); await muatSemua();
+                  } catch (err) { roti(pesanGalat(err), 'galat'); }
+                }
+              }, 'Tambah Catatan Baru')
+            : null,
+          el('button', {
+            class: 'tombol tombol-primer',
+            onclick: async () => {
+              const skor = bacaSkor();
+              const catatan = document.getElementById('sk-catatan').value.trim();
+              try {
+                if (sedangSunting) {
+                  await updateObservasiSikap(sedangSunting.id, {
+                    skor, catatan, tujuanPembelajaranId: tpTerpilih || null
+                  });
+                  roti('Catatan sikap diperbarui.', 'sukses');
+                } else {
+                  await simpanObservasiSikap({
+                    kelasId, muridId: m.murid_id, guruId: profil.id, skor, catatan,
+                    tujuanPembelajaranId: tpTerpilih || null
+                  });
+                  roti('Catatan sikap disimpan.', 'sukses');
+                }
+                tutup(); await muatSemua();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, sedangSunting ? 'Perbarui Catatan' : 'Simpan')
+        ])
+      ]);
+    }
+
+    gambar();
   }
 
   async function ubahKendali(m, kendaliBaru) {

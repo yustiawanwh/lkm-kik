@@ -150,6 +150,31 @@ export async function simpanObservasiSikap({ kelasId, muridId, guruId, skor, cat
   if (error) throw error;
 }
 
+/** Riwayat observasi sikap seorang murid di satu kelas, terbaru dulu. */
+export async function riwayatSikapMurid(kelasId, muridId) {
+  const { data, error } = await supabase
+    .from('observasi_sikap')
+    .select('*, tujuan_pembelajaran:tujuan_pembelajaran_id(id, kode, judul), guru:guru_id(nama)')
+    .eq('kelas_id', kelasId).eq('murid_id', muridId)
+    .order('dibuat_pada', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+/** Perbarui satu catatan observasi yang sudah ada. */
+export async function updateObservasiSikap(id, { skor, catatan, tujuanPembelajaranId }) {
+  const { error } = await supabase.from('observasi_sikap').update({
+    skor, catatan: catatan || null,
+    tujuan_pembelajaran_id: tujuanPembelajaranId || null
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function hapusObservasiSikap(id) {
+  const { error } = await supabase.from('observasi_sikap').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export const INDIKATOR_SIKAP = [
   { key: 'disiplin', label: 'Disiplin' },
   { key: 'kerjasama', label: 'Kerja Sama' },
