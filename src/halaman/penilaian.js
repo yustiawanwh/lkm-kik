@@ -6,7 +6,8 @@ import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
 import { daftarAntreanPenilaian, daftarSudahDinilai, nilaiTugas, perbaikiNilai, daftarKontribusi, simpanKontribusi, ambilRubrikProgram, kembalikanTugas } from '../lib/data-nilai.js';
-import { daftarBadgeProgram, beriBadgeManual } from '../lib/data-asesmen.js';
+import { daftarBadgeProgram, beriBadgeManual, rangkumanSejawatGuru } from '../lib/data-asesmen.js';
+import { panelRujukanSejawat } from '../lib/rujukan-sejawat.js';
 import { buatPanelPekerjaan } from '../lib/tampil-pekerjaan.js';
 import { cetakPekerjaan } from '../lib/cetak.js';
 import { daftarMuridKelas, daftarKelompok } from '../lib/data-kelas.js';
@@ -19,6 +20,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
   let badgeList = [], muridList = [], kelompokList = [], rubrik = null;
   let kelompokAn = 'kelompok';   // 'kelompok' | 'tugas'
   let daftarSedangTampil = [];
+  let sejawatPenugasan = [];   // seluruh penilaian sejawat pada penugasan ini
   let tab = 'antrean';
 
   async function muatSemua() {
@@ -31,11 +33,44 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
       muridList = await daftarMuridKelas(penugasan.kelas_id);
       kelompokList = await daftarKelompok(penugasan.kelas_id);
       rubrik = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
+      try { sejawatPenugasan = await rangkumanSejawatGuru(penugasanId); } catch { sejawatPenugasan = []; }
     } catch (err) {
       galat = pesanGalat(err);
     } finally {
       memuat = false; render();
     }
+  }
+
+  /** Rujukan nilai rekan, ditampilkan saat menilai agar guru tidak perlu
+   *  berpindah ke halaman Asesmen. Hanya muncul bila rubrik memang punya
+   *  kriteria afektif — di misi tanpa kriteria afektif, panel ini hanya
+   *  akan menambah kebisingan. */
+  function gambarRujukanSejawat(p) {
+    const adaAfektif = (rubrik?.kriteria || []).some(k => k.ranah === 'afektif');
+    if (!adaAfektif || sejawatPenugasan.length === 0) return null;
+
+    // Misi kelompok: tampilkan tiap anggota, karena afektif melekat pada
+    // orang, sedangkan nilai rubriknya berlaku untuk kelompok.
+    let orang;
+    if (p.kelompok_id) {
+      const idAnggota = [...new Set(sejawatPenugasan
+        .filter(x => x.kelompok_id === p.kelompok_id || true)
+        .map(x => x.dinilai_id))];
+      const anggotaKelompok = kelompokList.find(k => k.id === p.kelompok_id)?.anggota_kelompok || [];
+      const idSah = anggotaKelompok.map(a => a.murid_id);
+      orang = (idSah.length ? idSah : idAnggota).map(id => ({
+        nama: anggotaKelompok.find(a => a.murid_id === id)?.profil?.nama
+              || sejawatPenugasan.find(x => x.dinilai_id === id)?.dinilai?.nama || 'Murid',
+        baris: sejawatPenugasan.filter(x => x.dinilai_id === id)
+      }));
+    } else {
+      orang = [{
+        nama: p.profil?.nama || 'Murid',
+        baris: sejawatPenugasan.filter(x => x.dinilai_id === p.murid_id)
+      }];
+    }
+    if (orang.length === 0) return null;
+    return panelRujukanSejawat(orang);
   }
 
   /** Cetak hasil pekerjaan untuk dikoreksi luring. */
@@ -244,6 +279,7 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           el('span', { class: 'lencana' }, `Waktu kerja: ${formatDetik(p.detik_terpakai)}`)
         ]),
         buatPanelPekerjaan(p),
+        gambarRujukanSejawat(p),
         areaRubrik,
         el('div', { class: 'medan', style: 'margin-top:16px;' }, [
           el('label', {}, (rubrik && kriteriaDipakai.length > 0) ? 'Nilai Akhir (dihitung dari rubrik)' : 'Nilai (0–100)'),

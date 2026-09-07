@@ -33,6 +33,23 @@ export async function rangkumanSejawatGuru(penugasanId) {
   return data;
 }
 
+/** Rangkuman sejawat untuk SATU murid, lintas seluruh penugasan di kelas.
+ *  Dipakai sebagai rujukan saat guru mencatat observasi sikap. */
+export async function sejawatMurid(kelasId, muridId) {
+  const { data: penugasanList, error: e1 } = await supabase
+    .from('penugasan').select('id').eq('kelas_id', kelasId);
+  if (e1) throw e1;
+  if (!penugasanList.length) return [];
+
+  const { data, error } = await supabase
+    .from('penilaian_sejawat')
+    .select('*, penilai:penilai_id(nama)')
+    .in('penugasan_id', penugasanList.map(p => p.id))
+    .eq('dinilai_id', muridId);
+  if (error) throw error;
+  return data;
+}
+
 /** Guru: semua refleksi murid pada satu penugasan. */
 export async function daftarRefleksiPenugasan(penugasanId) {
   const { data, error } = await supabase

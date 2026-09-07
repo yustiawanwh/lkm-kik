@@ -767,6 +767,27 @@ input[type="file"] {
   padding: 6px 2px 8px; border-bottom: 1px solid var(--garis); margin-bottom: 10px;
 }
 
+/* ============ Rujukan nilai rekan (untuk guru) ============ */
+.rujukan-sejawat {
+  border: 1px solid var(--garis); border-radius: var(--radius);
+  padding: 10px 12px; margin: 12px 0; background: var(--permukaan-2);
+}
+.rujukan-sejawat summary {
+  cursor: pointer; font-weight: 600; font-size: 13px; color: var(--navy);
+  list-style: none;
+}
+.rujukan-sejawat summary::-webkit-details-marker { display: none; }
+.rujukan-sejawat summary::before { content: '▸ '; color: var(--abu-teks); }
+.rujukan-sejawat[open] summary::before { content: '▾ '; }
+.baris-sejawat {
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--permukaan); border: 1px solid var(--garis-halus);
+}
+.komentar-sejawat {
+  font-size: 12px; color: var(--abu-teks); margin-top: 5px;
+  padding-left: 8px; border-left: 2px solid var(--garis);
+}
+
 /* ============ Rincian penilaian untuk murid ============ */
 .rincian-nilai { border-top: 1px solid var(--garis); padding-top: 8px; }
 .rincian-nilai summary {

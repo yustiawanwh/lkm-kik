@@ -17,6 +17,8 @@ import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
 import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
 import { bukaKanalPrivat, daftarKanal } from '../lib/data-obrolan.js';
+import { sejawatMurid } from '../lib/data-asesmen.js';
+import { panelRujukanSejawat } from '../lib/rujukan-sejawat.js';
 
 // ============================================================
 // DAFTAR KELAS
@@ -291,6 +293,15 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
   }
 
   function bukaDialogSikap(m) {
+    // Rujukan nilai rekan dimuat setelah dialog terbuka agar tidak menunda
+    // tampilnya formulir.
+    const areaRujukan = el('div', {});
+    sejawatMurid(kelasId, m.murid_id)
+      .then(baris => isi(areaRujukan, [
+        panelRujukanSejawat([{ nama: m.profil?.nama || 'Murid', baris }])
+      ]))
+      .catch(() => { /* rujukan bersifat opsional */ });
+
     const { tutup } = dialog({
       judul: `Observasi Sikap — ${m.profil?.nama}`,
       isi: el('div', {}, [
@@ -298,6 +309,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           el('label', {}, ind.label),
           el('select', { id: `sk-${ind.key}` }, [1, 2, 3, 4, 5].map(n => el('option', { value: n, selected: n === 4 }, String(n))))
         ])),
+        areaRujukan,
         el('div', { class: 'medan' }, [
           el('label', {}, 'Berlaku untuk'),
           el('select', { id: 'sk-tp' }, [
