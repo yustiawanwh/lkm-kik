@@ -35,6 +35,7 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
     const ambang = pengaturan.ambang || { kkm: 75, hijau: 85 };
     const susulan = pengaturan.susulan || { penalti: 10 };
     const kecepatan = pengaturan.kecepatan || { durasi_target_jam: 24 };
+    const afektifSaran = pengaturan.afektif_saran || { aktif: true, min: 75, maks: 95 };
     const penyimpanan = pengaturan.penyimpanan || { mode: 'supabase', url: '', kirim_token: true };
     const lampiranObrolan = pengaturan.lampiran_obrolan || { aktif: true, maks_mb: 5 };
     const jamLayanan = pengaturan.jam_layanan || { aktif: true, mulai: '07:00', selesai: '15:00', hari: [1,2,3,4,5], catatan: '' };
@@ -119,6 +120,28 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
           medanAngka('Afektif (%)', ranah.bobot?.afektif ?? 25,
             v => simpan('ranah', { ...ranah, bobot: { ...ranah.bobot, afektif: v } }))
         ])
+      ]),
+      el('div', { class: 'kartu' }, [
+        el('h3', {}, 'Saran Nilai Afektif dari Penilaian Rekan'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 12px;' },
+          'Saat guru mencatat observasi sikap, hasil penilaian rekan dikonversi menjadi saran nilai untuk keempat indikator. Sifatnya usulan — guru tetap bisa menyesuaikan.'),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:12px;' }, [
+          el('input', {
+            type: 'checkbox', checked: afektifSaran.aktif !== false,
+            onchange: (e) => simpan('afektif_saran', { ...afektifSaran, aktif: e.target.checked })
+          }),
+          'Tampilkan saran nilai afektif'
+        ]),
+        el('div', { class: 'baris-medan' }, [
+          medanAngka('Batas Bawah', afektifSaran.min ?? 75,
+            v => simpan('afektif_saran', { ...afektifSaran, min: v })),
+          medanAngka('Batas Atas', afektifSaran.maks ?? 95,
+            v => simpan('afektif_saran', { ...afektifSaran, maks: v }))
+        ]),
+        el('div', { class: 'keterangan' },
+          'Skor rekan 1 dipetakan ke batas bawah, skor 5 ke batas atas. ' +
+          'Karena indikator sikap berskala 1–5 dan afektif dihitung (rata-rata ÷ 5) × 100, ' +
+          'rentang 75–95 setara indikator 3,75–4,75 — karena itu isian sikap menerima pecahan.')
       ]),
       el('div', { class: 'kartu' }, [
         el('h3', {}, 'Penyimpanan Berkas'),

@@ -767,6 +767,19 @@ input[type="file"] {
   padding: 6px 2px 8px; border-bottom: 1px solid var(--garis); margin-bottom: 10px;
 }
 
+/* ============ Panel saran nilai afektif ============ */
+.panel-saran {
+  border: 1px solid var(--biru-lembut); background: var(--biru-kabut);
+  border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px;
+}
+.baris-saran {
+  padding: 7px 9px; border-radius: var(--radius-sm);
+  background: var(--permukaan); border-left: 3px solid var(--garis);
+}
+.yakin-kuat { border-left-color: var(--hijau); }
+.yakin-sedang { border-left-color: var(--kuning); }
+.yakin-lemah { border-left-color: var(--merah); }
+
 /* ============ Rujukan nilai rekan (untuk guru) ============ */
 .rujukan-sejawat {
   border: 1px solid var(--garis); border-radius: var(--radius);

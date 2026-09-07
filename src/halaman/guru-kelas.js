@@ -19,6 +19,8 @@ import { updateProfil } from '../lib/data-profil.js';
 import { bukaKanalPrivat, daftarKanal } from '../lib/data-obrolan.js';
 import { sejawatMurid, riwayatSikapMurid, updateObservasiSikap, hapusObservasiSikap } from '../lib/data-asesmen.js';
 import { panelRujukanSejawat } from '../lib/rujukan-sejawat.js';
+import { saranSikapDariSejawat, RENTANG_BAWAAN } from '../lib/saran-sikap.js';
+import { ambilSemuaPengaturan } from '../lib/data-pengaturan.js';
 
 // ============================================================
 // DAFTAR KELAS
@@ -399,9 +401,13 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     // Karena itu formulir ini memuat catatan terakhir untuk disunting —
     // dulu selalu mulai dari nilai bawaan 4 dan selalu membuat baris baru,
     // sehingga koreksi guru justru menambah data alih-alih menggantikannya.
-    let riwayat = [];
-    try { riwayat = await riwayatSikapMurid(kelasId, m.murid_id); }
-    catch (err) { roti(pesanGalat(err), 'galat'); return; }
+    let riwayat = [], barisSejawat = [], rentangSaran = RENTANG_BAWAAN;
+    try {
+      riwayat = await riwayatSikapMurid(kelasId, m.murid_id);
+      barisSejawat = await sejawatMurid(kelasId, m.murid_id).catch(() => []);
+      const pengaturan = await ambilSemuaPengaturan().catch(() => ({}));
+      rentangSaran = { ...RENTANG_BAWAAN, ...(pengaturan.afektif_saran || {}) };
+    } catch (err) { roti(pesanGalat(err), 'galat'); return; }
 
     const daftarTp = [...new Map(penugasanList
       .filter(p => p.tujuan_pembelajaran)
@@ -426,9 +432,70 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
     function bacaSkor() {
       const skor = {};
       for (const ind of INDIKATOR_SIKAP) {
-        skor[ind.key] = Number(document.getElementById(`sk-${ind.key}`).value);
+        const n = Number(document.getElementById(`sk-${ind.key}`).value);
+        skor[ind.key] = Number.isFinite(n) ? Math.max(1, Math.min(5, n)) : 4;
       }
       return skor;
+    }
+
+    /** Tampilkan persentase afektif yang dihasilkan isian saat ini. */
+    function hitungPersen() {
+      const kotak = document.getElementById('sk-persen');
+      if (!kotak) return;
+      const skor = bacaSkor();
+      const nilai = Object.values(skor);
+      const persen = (nilai.reduce((a, b) => a + b, 0) / nilai.length) / 5 * 100;
+      const diLuar = persen < rentangSaran.min || persen > rentangSaran.maks;
+      kotak.textContent = `Menghasilkan nilai afektif ${persen.toFixed(1)}` +
+        (rentangSaran.aktif !== false
+          ? ` — rentang acuan ${rentangSaran.min}–${rentangSaran.maks}${diLuar ? ' (di luar rentang)' : ''}`
+          : '');
+      kotak.style.color = diLuar && rentangSaran.aktif !== false ? 'var(--kuning-teks)' : 'var(--abu-teks)';
+    }
+
+    /** Panel saran hasil konversi penilaian sejawat. */
+    function gambarPanelSaran() {
+      if (rentangSaran.aktif === false) return null;
+      // Saran dihitung dari penilaian sejawat pada TP yang sedang dipilih;
+      // bila "Umum", pakai seluruh penilaian yang ada.
+      const relevan = tpTerpilih
+        ? barisSejawat.filter(b => b.tujuan_pembelajaran?.id === tpTerpilih)
+        : barisSejawat;
+      const saran = saranSikapDariSejawat(relevan, rentangSaran);
+      if (!saran) return null;
+
+      return el('div', { class: 'panel-saran' }, [
+        el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;' }, [
+          el('span', { style: 'font-weight:650;font-size:13px;' },
+            `Saran dari penilaian rekan (${saran.jumlahPenilai} penilai)`),
+          el('button', {
+            class: 'tombol tombol-sekunder tombol-kecil',
+            onclick: () => {
+              for (const i of saran.indikator) {
+                if (i.saran == null) continue;
+                const kotak = document.getElementById(`sk-${i.key}`);
+                if (kotak) kotak.value = (Math.round(i.saran * 4) / 4).toFixed(2);
+              }
+              hitungPersen();
+              roti('Saran diterapkan. Silakan sesuaikan bila perlu.', 'sukses');
+            }
+          }, 'Terapkan Saran')
+        ]),
+        el('div', { style: 'display:flex;flex-direction:column;gap:6px;' },
+          saran.indikator.map(i => el('div', { class: `baris-saran yakin-${i.yakin}` }, [
+            el('div', { style: 'display:flex;justify-content:space-between;gap:8px;align-items:baseline;' }, [
+              el('span', { style: 'font-weight:600;font-size:12.5px;' }, i.label),
+              i.saran == null
+                ? el('span', { style: 'font-size:12px;color:var(--abu-teks-halus);' }, 'tidak ada data')
+                : el('span', { style: 'font-size:12.5px;font-weight:700;' },
+                    `${(Math.round(i.saran * 4) / 4).toFixed(2)}  (afektif ${i.persen.toFixed(1)})`)
+            ]),
+            i.skorSejawat != null
+              ? el('div', { style: 'font-size:11.5px;color:var(--abu-teks);margin-top:2px;' },
+                  `Skor rekan ${i.skorSejawat.toFixed(2)} · ${i.alasan}`)
+              : null
+          ])))
+      ]);
     }
 
     function gambar() {
@@ -463,20 +530,27 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           : el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
               'Belum ada catatan sikap untuk pilihan ini. Menyimpan akan membuat catatan baru.'),
 
-        ...INDIKATOR_SIKAP.map(ind => el('div', { class: 'medan' }, [
+        // Isian menerima PECAHAN (langkah 0,25). Dengan pemilih bilangan
+        // bulat, menerapkan saran 5 menghasilkan afektif 100 — melampaui
+        // batas atas yang diatur admin. Pecahan membuat hasilnya benar-benar
+        // jatuh di dalam rentang.
+        el('div', { class: 'baris-medan' }, INDIKATOR_SIKAP.map(ind => el('div', { class: 'medan' }, [
           el('label', {}, ind.label),
-          el('select', { id: `sk-${ind.key}` }, [1, 2, 3, 4, 5].map(n => {
-            const nilaiLama = Number(sedangSunting?.skor?.[ind.key]);
-            const terpilih = Number.isFinite(nilaiLama) ? nilaiLama : 4;
-            return el('option', { value: n, selected: n === terpilih }, String(n));
-          }))
-        ])),
+          el('input', {
+            id: `sk-${ind.key}`, type: 'number', min: '1', max: '5', step: '0.25',
+            value: Number.isFinite(Number(sedangSunting?.skor?.[ind.key]))
+              ? Number(sedangSunting.skor[ind.key]) : 4,
+            oninput: hitungPersen
+          })
+        ]))),
+        el('div', { id: 'sk-persen', class: 'keterangan', style: 'margin:-6px 0 12px;' }, ''),
 
         el('div', { class: 'medan' }, [
           el('label', {}, 'Catatan (opsional)'),
           el('textarea', { id: 'sk-catatan' }, sedangSunting?.catatan || '')
         ]),
 
+        gambarPanelSaran(),
         areaRujukan,
 
         lain.length > 0
@@ -549,6 +623,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           }, sedangSunting ? 'Perbarui Catatan' : 'Simpan')
         ])
       ]);
+      hitungPersen();
     }
 
     gambar();
