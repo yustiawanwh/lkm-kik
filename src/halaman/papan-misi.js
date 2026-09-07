@@ -20,6 +20,7 @@ import {
 } from '../lib/data-asesmen.js';
 import { ambilKendaliSaya } from '../lib/data-kelas.js';
 import { pantauKendali } from '../lib/realtime-kendali.js';
+import { ambilRubrikProgram } from '../lib/data-nilai.js';
 import { pasangSeret, baruSajaDiseret } from '../lib/seret.js';
 import { state } from '../main.js';
 
@@ -52,6 +53,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
+  let rubrikProgram = null;
   let modeRefleksiPerTahap = false;
   let lepasKendali = null;
   let tab = 'misi'; // 'misi' | 'lembar' | 'sejawat' | 'refleksi'
@@ -77,6 +79,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       lembarLepas = lembarList.filter(l => !kodeTertaut.has(l.kode.toLowerCase()));
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       modeRefleksiPerTahap = await refleksiPerTahap(penugasan.tujuan_pembelajaran_id);
+      rubrikProgram = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
 
       const kendaliRow = await ambilKendaliSaya(penugasan.kelas_id, profil.id);
       kendali = kendaliRow?.kendali || 'aktif';
@@ -298,12 +301,21 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       ]);
       isi(areaNilai, sudahDinilai ? [
         el('div', { class: 'kartu', style: 'margin-top:12px;background:var(--netral);' }, [
-          el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:6px;' }, [
+          el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;' }, [
             el('span', { class: `nilai-kotak ${WARNA_HURUF[progres.nilai_huruf] || 'nilai-kuning'}` }, progres.nilai_huruf || '—'),
-            el('span', { style: 'font-weight:600;font-size:13px;' }, `${progres.xp_diberikan} XP diberikan`),
+            progres.nilai_angka !== null && progres.nilai_angka !== undefined
+              ? el('span', { style: 'font-size:20px;font-weight:700;' }, String(progres.nilai_angka))
+              : null,
+            el('span', { class: 'lencana' }, `${progres.xp_diberikan} XP`),
             progres.kena_penalti_susulan ? el('span', { class: 'lencana lencana-susulan' }, 'Kena penalti susulan') : null
           ]),
-          progres.umpan_balik ? el('p', { style: 'font-size:13px;color:var(--abu-teks);margin:0;' }, progres.umpan_balik) : null
+          progres.umpan_balik
+            ? el('div', { style: 'margin-bottom:8px;' }, [
+                el('div', { style: 'font-size:12px;font-weight:600;color:var(--abu-teks);' }, 'Umpan balik guru'),
+                el('p', { style: 'font-size:13.5px;margin:2px 0 0;' }, progres.umpan_balik)
+              ])
+            : null,
+          gambarRincianRubrik(progres)
         ])
       ] : []);
     }
@@ -665,6 +677,43 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
     } catch (err) {
       isi(wadah, [el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah);' }, pesanGalat(err))]);
     }
+  }
+
+  /** Rincian penilaian per kriteria untuk murid.
+   *
+   *  Nilai huruf saja tidak memberi tahu apa yang perlu diperbaiki. Dengan
+   *  menampilkan level tiap kriteria beserta bunyi deskripsinya, murid tahu
+   *  persis di bagian mana ia sudah kuat dan di mana masih kurang. */
+  function gambarRincianRubrik(progres) {
+    const rincian = progres?.nilai_rubrik;
+    if (!rincian || !rubrikProgram?.kriteria?.length) return null;
+
+    const maks = rubrikProgram.skor_maks || 4;
+    const dipakai = rubrikProgram.kriteria.filter(k => rincian[k.nama] !== undefined);
+    if (dipakai.length === 0) return null;
+
+    return el('details', { class: 'rincian-nilai' }, [
+      el('summary', {}, `Rincian penilaian (${dipakai.length} kriteria)`),
+      el('div', { style: 'margin-top:8px;display:flex;flex-direction:column;gap:8px;' },
+        dipakai.map(k => {
+          const skor = Number(rincian[k.nama]);
+          const persen = Math.round((skor / maks) * 100);
+          const warna = persen >= 85 ? 'var(--hijau)' : persen >= 60 ? 'var(--kuning)' : 'var(--merah)';
+          return el('div', { class: 'baris-kriteria' }, [
+            el('div', { style: 'display:flex;justify-content:space-between;gap:8px;align-items:baseline;' }, [
+              el('span', { style: 'font-weight:600;font-size:13px;' }, k.nama),
+              el('span', { style: `font-weight:700;font-size:13px;color:${warna};flex-shrink:0;` }, `${skor} / ${maks}`)
+            ]),
+            k.level?.[skor]
+              ? el('div', { style: 'font-size:12.5px;color:var(--abu-teks);margin-top:2px;' }, k.level[skor])
+              : null,
+            // Tunjukkan apa yang perlu dicapai untuk naik satu tingkat.
+            (skor < maks && k.level?.[skor + 1])
+              ? el('div', { class: 'target-berikut' }, `Untuk ${skor + 1}: ${k.level[skor + 1]}`)
+              : null
+          ]);
+        }))
+    ]);
   }
 
   function gambarRingkasProgres() {

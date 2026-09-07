@@ -46,7 +46,7 @@ export async function daftarRefleksiPenugasan(penugasanId) {
 /** Guru: seluruh riwayat observasi sikap di satu kelas. */
 export async function daftarSikapKelas(kelasId) {
   const { data, error } = await supabase
-    .from('observasi_sikap').select('*, profil:murid_id(nama)')
+    .from('observasi_sikap').select('*, profil:murid_id(nama), tujuan_pembelajaran:tujuan_pembelajaran_id(kode, judul)')
     .eq('kelas_id', kelasId)
     .order('dibuat_pada', { ascending: false });
   if (error) throw error;
@@ -116,9 +116,12 @@ export async function daftarObservasiSikap(kelasId, muridId) {
   return data;
 }
 
-export async function simpanObservasiSikap({ kelasId, muridId, guruId, skor, catatan, sprintId }) {
+export async function simpanObservasiSikap({ kelasId, muridId, guruId, skor, catatan, sprintId, tujuanPembelajaranId }) {
   const { error } = await supabase.from('observasi_sikap').insert({
-    kelas_id: kelasId, murid_id: muridId, guru_id: guruId, skor, catatan: catatan || null, sprint_id: sprintId || null
+    kelas_id: kelasId, murid_id: muridId, guru_id: guruId, skor,
+    catatan: catatan || null, sprint_id: sprintId || null,
+    // NULL = catatan sikap umum, ikut dihitung pada TP mana pun.
+    tujuan_pembelajaran_id: tujuanPembelajaranId || null
   });
   if (error) throw error;
 }

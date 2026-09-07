@@ -31,7 +31,7 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
 
   function gambarPengaturan() {
     const antiSalin = pengaturan.anti_salin || { aktif: false };
-    const ranah = pengaturan.ranah || { tampilkan: true, sumber_afektif: 'gabungan', pakai_bobot: false, bobot: { kognitif: 50, psikomotor: 25, afektif: 25 } };
+    const ranah = pengaturan.ranah || { tampilkan: true, sumber_afektif: 'gabungan', sikap_lintas_tp: true, pakai_bobot: false, bobot: { kognitif: 50, psikomotor: 25, afektif: 25 } };
     const ambang = pengaturan.ambang || { kkm: 75, hijau: 85 };
     const susulan = pengaturan.susulan || { penalti: 10 };
     const kecepatan = pengaturan.kecepatan || { durasi_target_jam: 24 };
@@ -84,6 +84,21 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
           el('div', { class: 'keterangan' },
             'Pada pilihan pertama: bila salah satu sumber kosong, nilai diambil dari yang ada; ' +
             'bila keduanya terisi, keduanya dirata-rata.')
+        ]),
+
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Cakupan Observasi Sikap'),
+          el('select', {
+            onchange: (e) => simpan('ranah', { ...ranah, sikap_lintas_tp: e.target.value === 'lintas' })
+          }, [
+            el('option', { value: 'lintas', selected: ranah.sikap_lintas_tp !== false },
+              'Lintas TP — seluruh catatan sikap di kelas ini'),
+            el('option', { value: 'per_tp', selected: ranah.sikap_lintas_tp === false },
+              'Per TP — hanya catatan pada TP yang sedang dilihat')
+          ]),
+          el('div', { class: 'keterangan' },
+            'Pilihan "Per TP" hanya berpengaruh saat Rekap Nilai disaring ke satu TP. ' +
+            'Catatan sikap bertanda "Umum" tetap ikut dihitung pada kedua pilihan.')
         ]),
 
         el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:10px;' }, [

@@ -299,6 +299,18 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           el('select', { id: `sk-${ind.key}` }, [1, 2, 3, 4, 5].map(n => el('option', { value: n, selected: n === 4 }, String(n))))
         ])),
         el('div', { class: 'medan' }, [
+          el('label', {}, 'Berlaku untuk'),
+          el('select', { id: 'sk-tp' }, [
+            el('option', { value: '' }, 'Umum — semua TP'),
+            ...[...new Map(penugasanList
+                .filter(p => p.tujuan_pembelajaran)
+                .map(p => [p.tujuan_pembelajaran.id, p.tujuan_pembelajaran])).values()]
+              .map(tp => el('option', { value: tp.id }, `${tp.kode ? tp.kode + ' — ' : ''}${tp.judul}`))
+          ]),
+          el('div', { class: 'keterangan' },
+            'Pilih TP bila sikap ini teramati pada unit tertentu. "Umum" selalu ikut dihitung pada TP mana pun.')
+        ]),
+        el('div', { class: 'medan' }, [
           el('label', {}, 'Catatan (opsional)'),
           el('textarea', { id: 'sk-catatan' })
         ]),
@@ -311,7 +323,11 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
               for (const ind of INDIKATOR_SIKAP) skor[ind.key] = Number(document.getElementById(`sk-${ind.key}`).value);
               const catatan = document.getElementById('sk-catatan').value.trim();
               try {
-                await simpanObservasiSikap({ kelasId, muridId: m.murid_id, guruId: profil.id, skor, catatan });
+                const tpDipilih = document.getElementById('sk-tp')?.value || null;
+                await simpanObservasiSikap({
+                  kelasId, muridId: m.murid_id, guruId: profil.id, skor, catatan,
+                  tujuanPembelajaranId: tpDipilih
+                });
                 tutup(); roti('Observasi sikap tersimpan.', 'sukses');
               } catch (err) { roti(pesanGalat(err), 'galat'); }
             }

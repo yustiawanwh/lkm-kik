@@ -15,6 +15,7 @@ export const LABEL_RANAH = { kognitif: 'Kognitif', psikomotor: 'Psikomotor', afe
 const PENGATURAN_BAWAAN = {
   tampilkan: true,
   sumber_afektif: 'gabungan',
+  sikap_lintas_tp: true,
   pakai_bobot: false,
   bobot: { kognitif: 50, psikomotor: 25, afektif: 25 }
 };
@@ -35,17 +36,42 @@ function rata(daftar) {
 /**
  * Rekap satu kelas: rata-rata nilai, nilai per ranah, misi selesai, XP, badge.
  */
-export async function rekapKelas(kelasId) {
+/** Daftar program (TP) yang pernah ditugaskan ke sebuah kelas. */
+export async function programDiKelas(kelasId) {
+  const { data, error } = await supabase
+    .from('penugasan')
+    .select('tujuan_pembelajaran:tujuan_pembelajaran_id(id, kode, judul)')
+    .eq('kelas_id', kelasId);
+  if (error) throw error;
+  const peta = new Map();
+  for (const p of data) {
+    const tp = p.tujuan_pembelajaran;
+    if (tp && !peta.has(tp.id)) peta.set(tp.id, tp);
+  }
+  return [...peta.values()].sort((a, b) =>
+    String(a.kode || a.judul).localeCompare(String(b.kode || b.judul), 'id', { numeric: true }));
+}
+
+/**
+ * Rekap satu kelas.
+ * @param {string} kelasId
+ * @param {string|null} tpId  bila diisi, hanya menghitung program itu.
+ *   Tanpa penyaring ini, kelas yang mengerjakan beberapa TP akan tercampur
+ *   menjadi satu angka dan tidak bisa dipakai untuk rapor.
+ */
+export async function rekapKelas(kelasId, tpId = null) {
   const aturan = await ambilPengaturanRanah();
 
   const { data: pendaftaran, error: e1 } = await supabase
     .from('pendaftaran').select('murid_id, profil:murid_id(nama, email, no_absen)').eq('kelas_id', kelasId);
   if (e1) throw e1;
 
-  const { data: penugasanList, error: e2 } = await supabase
+  let qPenugasan = supabase
     .from('penugasan')
-    .select('id, tujuan_pembelajaran:tujuan_pembelajaran_id(id, judul, rubrik)')
+    .select('id, tujuan_pembelajaran:tujuan_pembelajaran_id(id, kode, judul, rubrik)')
     .eq('kelas_id', kelasId);
+  if (tpId) qPenugasan = qPenugasan.eq('tujuan_pembelajaran_id', tpId);
+  const { data: penugasanList, error: e2 } = await qPenugasan;
   if (e2) throw e2;
   const penugasanIds = penugasanList.map(p => p.id);
 
@@ -132,8 +158,16 @@ export async function rekapKelas(kelasId) {
   }
 
   // ---- Observasi sikap → persentase (skala 1–5) ----
-  const { data: sikapList, error: e4 } = await supabase
-    .from('observasi_sikap').select('murid_id, skor').eq('kelas_id', kelasId);
+  // Bila sakelar "lintas TP" dimatikan DAN rekap sedang disaring ke satu TP,
+  // hanya catatan sikap pada TP itu yang dihitung — ditambah catatan umum
+  // (tujuan_pembelajaran_id NULL), yang memang tidak terikat unit mana pun.
+  let qSikap = supabase
+    .from('observasi_sikap').select('murid_id, skor, tujuan_pembelajaran_id')
+    .eq('kelas_id', kelasId);
+  if (tpId && aturan.sikap_lintas_tp === false) {
+    qSikap = qSikap.or(`tujuan_pembelajaran_id.eq.${tpId},tujuan_pembelajaran_id.is.null`);
+  }
+  const { data: sikapList, error: e4 } = await qSikap;
   if (e4) throw e4;
 
   const sikapPerMurid = new Map();
@@ -154,6 +188,7 @@ export async function rekapKelas(kelasId) {
   // ---- Susun baris ----
   return {
     aturan,
+    tpId,
     baris: pendaftaran.map(pd => {
       const id = pd.murid_id;
       const ranahMentah = skorRanah.get(id) || { kognitif: [], psikomotor: [], afektif: [] };

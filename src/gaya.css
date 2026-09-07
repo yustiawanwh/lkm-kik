@@ -767,6 +767,24 @@ input[type="file"] {
   padding: 6px 2px 8px; border-bottom: 1px solid var(--garis); margin-bottom: 10px;
 }
 
+/* ============ Rincian penilaian untuk murid ============ */
+.rincian-nilai { border-top: 1px solid var(--garis); padding-top: 8px; }
+.rincian-nilai summary {
+  cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--biru);
+  list-style: none;
+}
+.rincian-nilai summary::-webkit-details-marker { display: none; }
+.rincian-nilai summary::before { content: '▸ '; }
+.rincian-nilai[open] summary::before { content: '▾ '; }
+.baris-kriteria {
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--permukaan); border: 1px solid var(--garis-halus);
+}
+.target-berikut {
+  font-size: 12px; color: var(--biru-tua); margin-top: 5px;
+  padding-top: 5px; border-top: 1px dashed var(--garis);
+}
+
 /* ============ Penanda tugas dikembalikan ============ */
 .tanda-dikembalikan {
   display: flex; align-items: center; gap: 5px; margin-top: 8px;

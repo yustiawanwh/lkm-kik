@@ -83,7 +83,13 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
     return el('div', { class: 'daftar-baris' }, sikap.map(s => el('div', { class: 'kartu' }, [
       el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;' }, [
         el('span', { style: 'font-weight:700;' }, s.profil?.nama || s.murid_id),
-        el('span', { style: 'font-size:11px;color:var(--abu-teks-halus);' }, tanggalId(s.dibuat_pada, true))
+        el('div', { style: 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;' }, [
+          el('span', { class: 'lencana' },
+            s.tujuan_pembelajaran
+              ? (s.tujuan_pembelajaran.kode || s.tujuan_pembelajaran.judul)
+              : 'Umum'),
+          el('span', { style: 'font-size:11px;color:var(--abu-teks-halus);' }, tanggalId(s.dibuat_pada, true))
+        ])
       ]),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;' },
         INDIKATOR_SIKAP.map(ind => el('span', { class: 'lencana' }, `${ind.label}: ${s.skor?.[ind.key] ?? '—'}`))),
