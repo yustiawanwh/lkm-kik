@@ -91,6 +91,15 @@ export async function ubahStatusProgres(id, status) {
 }
 
 /** Simpan detik_terpakai — dipanggil berkala oleh timer (penyimpanan andal). */
+/** Setel batas waktu hitung mundur saat timer pertama kali dijalankan. */
+export async function setelBatasWaktu(progresId, menit) {
+  const batas = new Date(Date.now() + menit * 60000).toISOString();
+  const { data, error } = await supabase.from('progres_tugas')
+    .update({ batas_waktu: batas }).eq('id', progresId).select().single();
+  if (error) throw error;
+  return data;
+}
+
 export async function simpanDetikTerpakai(id, detik) {
   const { error } = await supabase.from('progres_tugas').update({ detik_terpakai: detik }).eq('id', id);
   if (error) throw error;

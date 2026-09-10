@@ -136,6 +136,31 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
           el('textarea', { id: 'kb-catatan', placeholder: 'mis. Lembar B masih kosong, mohon dilengkapi dulu sebelum diserahkan kembali.' }),
           el('div', { class: 'keterangan' }, 'Catatan ini yang dibaca murid, jadi sebutkan apa persisnya yang perlu diperbaiki.')
         ]),
+        // Pilihan hitung mundur untuk pengerjaan ulang.
+        (p.tugas?.durasi_menit || p.durasi_menit) ? el('div', { class: 'medan' }, [
+          el('label', {}, 'Batas Waktu Perbaikan'),
+          el('div', { class: 'keterangan', style: 'margin:0 0 8px;' },
+            `Waktu sebelumnya: ${p.durasi_menit || p.tugas?.durasi_menit} menit` +
+            (p.durasi_menit && p.durasi_menit !== p.tugas?.durasi_menit
+              ? ` (khusus murid ini; bawaan misi ${p.tugas?.durasi_menit || '-'} menit)` : '')),
+          el('select', {
+            id: 'kb-mode-durasi',
+            onchange: (e) => {
+              const kotak = document.getElementById('kb-durasi');
+              if (kotak) kotak.style.display = e.target.value === 'beda' ? '' : 'none';
+            }
+          }, [
+            el('option', { value: 'sama', selected: true }, `Samakan dengan sebelumnya (${p.durasi_menit || p.tugas?.durasi_menit} menit)`),
+            el('option', { value: 'beda' }, 'Tentukan waktu berbeda'),
+            el('option', { value: 'tanpa' }, 'Tanpa batas waktu')
+          ]),
+          el('input', {
+            id: 'kb-durasi', type: 'number', min: '1', style: 'display:none;margin-top:8px;',
+            placeholder: 'menit', value: p.durasi_menit || p.tugas?.durasi_menit || ''
+          }),
+          el('div', { class: 'keterangan' },
+            'Hitung mundur disetel ulang dari awal saat murid menekan Mulai Mengerjakan lagi.')
+        ]) : null,
         el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;' }, [
           el('input', { type: 'checkbox', id: 'kb-backlog' }),
           el('span', { style: 'font-size:13.5px;' }, 'Kembalikan ke kolom "Belum Dikerjakan" (bukan "Dikerjakan")')
@@ -147,8 +172,15 @@ export async function renderPenilaian(root, { profil, onKeluar, penugasanId }) {
             onclick: async () => {
               const catatan = document.getElementById('kb-catatan').value.trim();
               if (!catatan) { roti('Catatan untuk murid wajib diisi.', 'galat'); return; }
+              // Terjemahkan pilihan durasi menjadi nilai yang disimpan.
+              let durasi = null;
+              const mode = document.getElementById('kb-mode-durasi')?.value;
+              if (mode === 'sama') durasi = p.durasi_menit || p.tugas?.durasi_menit || null;
+              else if (mode === 'beda') durasi = Number(document.getElementById('kb-durasi').value) || null;
+              else if (mode === 'tanpa') durasi = null;
+
               try {
-                await kembalikanTugas(p.id, catatan, document.getElementById('kb-backlog').checked);
+                await kembalikanTugas(p.id, catatan, document.getElementById('kb-backlog').checked, durasi);
                 tutup(); roti('Tugas dikembalikan ke murid.', 'sukses');
                 await muatSemua();
               } catch (err) { roti(pesanGalat(err), 'galat'); }

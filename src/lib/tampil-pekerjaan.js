@@ -6,6 +6,8 @@ import { pesanGalat } from './kesalahan.js';
 import { buatWidgetLembar } from './lembar-widget.js';
 import { isianUntukProgres } from './data-nilai.js';
 import { daftarLampiran } from './data-lampiran.js';
+import { ambilRefleksi, promptRefleksiProgram, refleksiPerTahap } from './data-asesmen.js';
+import { supabase } from './supabase.js';
 import { urlBukti } from './bukti.js';
 
 /** Bangun panel "Hasil Pekerjaan" untuk satu baris progres_tugas.
@@ -26,18 +28,40 @@ export function buatPanelPekerjaan(progres) {
         bagian.push(el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-bottom:10px;' },
           'Misi ini tidak tertaut ke lembar kerja mana pun.'));
       } else {
-        for (const { lembar, isian } of daftarIsian) {
-          bagian.push(el('div', { class: 'kartu', style: 'padding:12px;margin-bottom:10px;background:var(--netral);' },
+        for (const { lembar, isian, pemilik } of daftarIsian) {
+          bagian.push(el('div', { class: 'kartu', style: 'padding:12px;margin-bottom:10px;background:var(--netral);' }, [
+            el('div', { style: 'font-size:12px;font-weight:600;color:var(--abu-teks);margin-bottom:6px;' },
+              `${lembar.kode} — ${lembar.judul}` + (pemilik ? ` · ${pemilik}` : '')),
             isian.id
               ? buatWidgetLembar({ lembar, isian, bisaEdit: false, profil: null, anggotaKelompok: [], tampilanGuru: true }).elemen
-              : el('div', { style: 'font-size:13px;color:var(--abu-teks);' }, `${lembar.judul} — belum diisi murid.`)
-          ));
+              : el('div', { style: 'font-size:13px;color:var(--abu-teks);' }, 'Belum diisi.')
+          ]));
         }
       }
     } catch (err) {
       bagian.push(el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah);margin-bottom:10px;' },
         pesanGalat(err)));
     }
+
+    // ---- Refleksi murid ----
+    // Rubrik sering punya kriteria "Kedalaman refleksi", tetapi isian
+    // refleksi hanya tampil di halaman Asesmen — guru tidak bisa membacanya
+    // saat menilai. Karena itu ditarik ke sini.
+    try {
+      const teksRefleksi = await ambilRefleksiUntukProgres(progres);
+      if (teksRefleksi.length > 0) {
+        bagian.push(el('div', { style: 'font-weight:700;font-size:13px;margin:14px 0 8px;' }, 'Refleksi Murid'));
+        for (const r of teksRefleksi) {
+          bagian.push(el('div', { class: 'kartu', style: 'padding:10px 12px;margin-bottom:8px;background:var(--permukaan-2);' }, [
+            r.nama ? el('div', { style: 'font-size:12px;font-weight:600;color:var(--abu-teks);margin-bottom:6px;' }, r.nama) : null,
+            ...r.jawaban.map(j => el('div', { style: 'margin-bottom:8px;' }, [
+              el('div', { style: 'font-size:12px;font-weight:600;color:var(--abu-teks);' }, j.label),
+              el('div', { style: 'font-size:13.5px;white-space:pre-wrap;' }, j.isi || '—')
+            ]))
+          ]));
+        }
+      }
+    } catch { /* refleksi bersifat tambahan */ }
 
     // ---- Bukti karya ----
     try {
@@ -76,6 +100,44 @@ export function buatPanelPekerjaan(progres) {
   })();
 
   return wadah;
+}
+
+/** Ambil refleksi murid (atau seluruh anggota kelompok) untuk ditampilkan
+ *  bersama pekerjaannya saat guru menilai. */
+async function ambilRefleksiUntukProgres(progres) {
+  const { data: penugasan, error } = await supabase
+    .from('penugasan').select('tujuan_pembelajaran_id').eq('id', progres.penugasan_id).single();
+  if (error) throw error;
+
+  const tpId = penugasan.tujuan_pembelajaran_id;
+  const prompt = await promptRefleksiProgram(tpId);
+  const perTahap = await refleksiPerTahap(tpId);
+  // Mode per tahap butuh sprint tertentu; ambil dari misi yang dinilai.
+  const sprintId = perTahap ? (progres.tugas?.sprint_id || null) : null;
+
+  let orang = [];
+  if (progres.murid_id) {
+    orang = [{ id: progres.murid_id, nama: null }];
+  } else if (progres.kelompok_id) {
+    const { data: anggota } = await supabase
+      .from('anggota_kelompok').select('murid_id, profil:murid_id(nama, no_absen)')
+      .eq('kelompok_id', progres.kelompok_id);
+    orang = (anggota || []).map(a => ({
+      id: a.murid_id,
+      nama: (a.profil?.no_absen ? `${a.profil.no_absen}. ` : '') + (a.profil?.nama || 'Murid')
+    }));
+  }
+
+  const hasil = [];
+  for (const o of orang) {
+    const r = await ambilRefleksi(progres.penugasan_id, sprintId, o.id).catch(() => null);
+    if (!r?.jawaban) continue;
+    const jawaban = prompt
+      .map(p => ({ label: p.label, isi: r.jawaban[p.key] }))
+      .filter(j => j.isi && String(j.isi).trim() !== '');
+    if (jawaban.length > 0) hasil.push({ nama: o.nama, jawaban });
+  }
+  return hasil;
 }
 
 function bukaGambarPenuh(url, nama) {

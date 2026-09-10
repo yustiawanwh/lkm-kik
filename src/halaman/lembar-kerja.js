@@ -208,7 +208,7 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
       case 'likert': return gambarLikert({ ...props, onUbah: ubahSelDanRender });
       case 'matriks': case 'daftar':
         return lembar.struktur?.kolom_terhitung?.length
-          ? gambarMatriksTerhitung({ ...props, onUbah: ubahSelDanRender, barisDinamis: lembar.baris_dinamis })
+          ? gambarMatriksTerhitung({ ...props, onUbah: ubahSel, barisDinamis: lembar.baris_dinamis })
           : gambarMatriks();
       default: return gambarFormulir();
     }

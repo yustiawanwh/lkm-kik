@@ -21,7 +21,7 @@ export async function daftarSudahDinilai(penugasanId) {
   return ambilSemua((dari, ke) =>
     supabase
       .from('progres_tugas')
-      .select('*, tugas:tugas_id(judul, kode, xp, urutan, sprint:sprint_id(nomor)), profil:murid_id(nama, no_absen), kelompok:kelompok_id(nama)')
+      .select('*, tugas:tugas_id(*, sprint:sprint_id(nomor)), profil:murid_id(nama, no_absen), kelompok:kelompok_id(nama)')
       .eq('penugasan_id', penugasanId)
       .eq('status', 'selesai')
       .order('disetujui_pada', { ascending: false })
@@ -54,9 +54,10 @@ export async function perbaikiNilai(progresId, nilai, umpanBalik, nilaiRubrik = 
 
 /** Kembalikan tugas ke murid disertai catatan. Bila tugas sudah terlanjur
  *  dinilai, XP-nya ditarik lebih dulu di dalam RPC. */
-export async function kembalikanTugas(progresId, catatan, keBacklog = false) {
+export async function kembalikanTugas(progresId, catatan, keBacklog = false, durasiMenit = null) {
   const { data, error } = await supabase.rpc('kembalikan_tugas', {
-    p_progres_id: progresId, p_catatan: catatan, p_ke_backlog: keBacklog
+    p_progres_id: progresId, p_catatan: catatan, p_ke_backlog: keBacklog,
+    p_durasi_menit: durasiMenit
   });
   if (error) throw error;
   return data;
@@ -117,16 +118,50 @@ export async function isianUntukProgres(progres) {
   const cocok = lembarList.filter(l => kodeList.includes(l.kode.toLowerCase()));
   if (cocok.length === 0) return [];
 
-  let q = supabase.from('isian_lembar').select('*')
+  // Pemilik isian mengikuti sifat LEMBAR (milik_kelompok), bukan sifat
+  // misinya. Dulu memakai sifat progres, sehingga lembar perorangan yang
+  // ditautkan ke misi kelompok tidak pernah ketemu — panel guru tampak
+  // kosong padahal murid sudah mengisinya.
+  const idAnggota = [];
+  if (progres.kelompok_id) {
+    const { data: anggota, error: eA } = await supabase
+      .from('anggota_kelompok').select('murid_id, profil:murid_id(nama, no_absen)')
+      .eq('kelompok_id', progres.kelompok_id);
+    if (eA) throw eA;
+    idAnggota.push(...anggota.map(a => ({ id: a.murid_id, nama: a.profil?.nama, absen: a.profil?.no_absen })));
+  }
+
+  const { data: isianList, error: eI } = await supabase
+    .from('isian_lembar').select('*')
     .eq('penugasan_id', progres.penugasan_id)
     .in('lembar_kerja_id', cocok.map(l => l.id));
-  q = progres.kelompok_id ? q.eq('kelompok_id', progres.kelompok_id) : q.eq('murid_id', progres.murid_id);
-
-  const { data: isianList, error: eI } = await q;
   if (eI) throw eI;
 
-  return cocok.map(l => ({
-    lembar: l,
-    isian: isianList.find(i => i.lembar_kerja_id === l.id) || { id: null, data: {} }
-  }));
+  const hasil = [];
+  for (const l of cocok) {
+    const untukLembar = isianList.filter(i => i.lembar_kerja_id === l.id);
+
+    if (l.milik_kelompok) {
+      const isian = untukLembar.find(i => i.kelompok_id === progres.kelompok_id);
+      hasil.push({ lembar: l, isian: isian || { id: null, data: {} } });
+      continue;
+    }
+
+    // Lembar perorangan pada misi kelompok: tampilkan milik SETIAP anggota,
+    // karena tiap murid punya barisnya sendiri.
+    if (progres.kelompok_id && idAnggota.length > 0) {
+      for (const a of idAnggota) {
+        const isian = untukLembar.find(i => i.murid_id === a.id);
+        hasil.push({
+          lembar: l, isian: isian || { id: null, data: {} },
+          pemilik: (a.absen ? `${a.absen}. ` : '') + (a.nama || 'Murid')
+        });
+      }
+      continue;
+    }
+
+    const isian = untukLembar.find(i => i.murid_id === progres.murid_id);
+    hasil.push({ lembar: l, isian: isian || { id: null, data: {} } });
+  }
+  return hasil;
 }

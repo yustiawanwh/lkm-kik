@@ -21,6 +21,7 @@ import {
 import { ambilKendaliSaya } from '../lib/data-kelas.js';
 import { pantauKendali } from '../lib/realtime-kendali.js';
 import { ambilRubrikProgram } from '../lib/data-nilai.js';
+import { setelBatasWaktu } from '../lib/data-papan.js';
 import { pasangSeret, baruSajaDiseret } from '../lib/seret.js';
 import { state } from '../main.js';
 
@@ -128,6 +129,55 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       return detikBerjalan + (waktuMulaiLokal ? Math.floor((Date.now() - waktuMulaiLokal) / 1000) : 0);
     }
 
+    /** Durasi yang berlaku: durasi khusus murid ini bila ada (mis. setelah
+     *  tugas dikembalikan guru), selain itu durasi bawaan misi. */
+    function durasiMenit() {
+      const khusus = progres?.durasi_menit;
+      if (Number.isFinite(Number(khusus)) && Number(khusus) > 0) return Number(khusus);
+      const bawaan = Number(t.durasi_menit);
+      return Number.isFinite(bawaan) && bawaan > 0 ? bawaan : null;
+    }
+
+    function adaHitungMundur() { return durasiMenit() !== null; }
+
+    /** Sisa detik sampai batas waktu. null bila tanpa batas. */
+    function sisaDetik() {
+      if (!adaHitungMundur()) return null;
+      if (!progres?.batas_waktu) return durasiMenit() * 60;
+      return Math.max(0, Math.floor((new Date(progres.batas_waktu).getTime() - Date.now()) / 1000));
+    }
+
+    let sedangOtomatis = false;
+    /** Saat waktu habis, pekerjaan diserahkan sendiri ke guru. */
+    async function serahkanOtomatis() {
+      if (sedangOtomatis || !progres) return;
+      sedangOtomatis = true;
+      clearInterval(intervalId); clearInterval(simpanIntervalId);
+      intervalId = null; simpanIntervalId = null;
+      if (waktuMulaiLokal) { detikBerjalan = detikTotal(); waktuMulaiLokal = null; }
+      try {
+        await simpanDetikTerpakai(progres.id, detikBerjalan);
+        progres = await ubahStatusProgres(progres.id, 'review');
+        progresMap.set(t.id, progres);
+        roti('Waktu habis — pekerjaan otomatis diserahkan ke guru.', 'info', 6000);
+      } catch (err) {
+        roti(pesanGalat(err), 'galat');
+      }
+      render(); gambarUlangAksi(); gambarUlangLembar(); gambarUlangBukti();
+    }
+
+    /** Perbarui angka pada layar tiap detik. */
+    function perbaruiTampilanWaktu() {
+      if (adaHitungMundur()) {
+        const sisa = sisaDetik();
+        elWaktu.textContent = formatDetik(sisa);
+        elWaktu.style.color = sisa <= 60 ? 'var(--merah)' : sisa <= 300 ? 'var(--kuning-teks)' : '';
+        if (sisa <= 0) serahkanOtomatis();
+      } else {
+        elWaktu.textContent = formatDetik(detikTotal());
+      }
+    }
+
     async function simpanSekarang() {
       if (!progres) return;
       try { await simpanDetikTerpakai(progres.id, detikTotal()); } catch { /* jangan ganggu UX kalau gagal sesaat */ }
@@ -232,8 +282,18 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
           elStatus.textContent = labelStatus('dikerjakan');
         } catch (err) { roti(pesanGalat(err), 'galat'); }
       }
+      // Batas waktu ditetapkan sekali, saat timer pertama kali dijalankan.
+      // Menyimpannya di server membuat hitung mundur tetap berjalan walau
+      // murid menutup lalu membuka lagi halamannya.
+      if (adaHitungMundur() && !progres.batas_waktu) {
+        try {
+          progres = await setelBatasWaktu(progres.id, durasiMenit());
+          progresMap.set(t.id, progres);
+        } catch (err) { roti(pesanGalat(err), 'galat'); }
+      }
       waktuMulaiLokal = Date.now();
-      intervalId = setInterval(() => { elWaktu.textContent = formatDetik(detikTotal()); }, 1000);
+      perbaruiTampilanWaktu();
+      intervalId = setInterval(perbaruiTampilanWaktu, 1000);
       simpanIntervalId = setInterval(simpanSekarang, JEDA_SIMPAN_MS);
       render(); // re-render papan di belakang agar status/lencana ikut update
       gambarUlangAksi();

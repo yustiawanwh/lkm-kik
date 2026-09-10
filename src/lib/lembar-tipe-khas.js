@@ -7,7 +7,7 @@
 // perubahan sel — pemanggil (lembar-kerja.js / lembar-widget.js) yang
 // bertanggung jawab menyimpan & (opsional) menyiarkan lewat realtime.
 
-import { el } from './dom.js';
+import { el, isi } from './dom.js';
 import { atributJalur } from './jalur-sel.js';
 import { selTeks } from './sel-teks.js';
 import { ikon, ikonTeks } from './ikon.js';
@@ -336,7 +336,21 @@ export function gambarMatriksTerhitung({ struktur, data, bisaEdit, onUbah, onTam
   const hitung = (row, def) => (def.dari || [])
     .reduce((total, ki) => total + (Number(row[`k${ki}`]) || 0), 0);
 
-  return el('div', {}, [
+  // Kolom Total diperbarui LANGSUNG di selnya, bukan dengan menggambar
+  // ulang seluruh lembar. Penggambaran ulang menghancurkan kotak isian
+  // yang sedang diketik, sehingga fokus hilang setiap huruf — murid hanya
+  // bisa mengetik satu huruf lalu harus mengklik ulang.
+  function segarkanTotal(i) {
+    const row = baris[i];
+    terhitung.forEach((t, ti) => {
+      const sel = wadah.querySelector(`[data-total="${i}-${ti}"]`);
+      if (sel) sel.textContent = String(hitung(row, t));
+    });
+  }
+
+  const wadah = el('div', {});
+
+  isi(wadah, [
     el('table', { style: 'width:100%;border-collapse:collapse;' }, [
       el('thead', {}, el('tr', {}, [
         ...kolom.map(k => el('th', { style: 'text-align:left;padding:6px;border-bottom:2px solid var(--garis);font-size:12px;color:var(--abu-teks);' }, k)),
@@ -347,10 +361,15 @@ export function gambarMatriksTerhitung({ struktur, data, bisaEdit, onUbah, onTam
         ...kolom.map((k, ki) => el('td', { class: 'sel-tabel' }, [
           selTeks({
             path: ['baris', String(i), `k${ki}`],
-            nilai: row[`k${ki}`] ?? '', bisaEdit, onUbah
+            nilai: row[`k${ki}`] ?? '', bisaEdit,
+            // Setelah nilai tersimpan, kolom Total disegarkan di tempat —
+            // bukan dengan menggambar ulang lembar, yang akan merenggut
+            // fokus dari kotak yang sedang diketik.
+            onUbah: (path, nilai) => { onUbah(path, nilai); segarkanTotal(i); }
           })
         ])),
-        ...terhitung.map(t => el('td', {
+        ...terhitung.map((t, ti) => el('td', {
+          'data-total': `${i}-${ti}`,
           style: 'padding:3px;border-bottom:1px solid var(--garis-halus);text-align:center;font-weight:700;color:var(--biru-tua);'
         }, String(hitung(row, t)))),
         bisaEdit && barisDinamis
@@ -362,4 +381,5 @@ export function gambarMatriksTerhitung({ struktur, data, bisaEdit, onUbah, onTam
       ? el('button', { class: 'tombol tombol-sekunder tombol-kecil', style: 'margin-top:8px;', onclick: onTambahBaris }, '+ Tambah Baris')
       : null
   ]);
+  return wadah;
 }

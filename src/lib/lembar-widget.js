@@ -118,7 +118,7 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
         // Kalau guru mendefinisikan kolom_terhitung, pakai perender yang
         // menjumlah otomatis (mis. Matriks Penyaringan Gagasan).
         return lembar.struktur?.kolom_terhitung?.length
-          ? gambarMatriksTerhitung({ ...props, onUbah: ubahSelDanGambarUlang, barisDinamis: lembar.baris_dinamis })
+          ? gambarMatriksTerhitung({ ...props, onUbah: ubahSel, barisDinamis: lembar.baris_dinamis })
           : gambarMatriks();
       default: return gambarFormulir();
     }

@@ -264,6 +264,15 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
           ])
         ]),
         el('div', { class: 'medan' }, [
+          el('label', {}, 'Batas Waktu Pengerjaan (menit)'),
+          el('input', {
+            id: 't-durasi', type: 'number', min: '1', placeholder: 'kosongkan bila tanpa batas',
+            value: tugasLama?.durasi_menit ?? ''
+          }),
+          el('div', { class: 'keterangan' },
+            'Bila diisi, timer misi berjalan mundur. Saat waktu habis, pekerjaan otomatis diserahkan ke guru. Kosongkan untuk timer yang menghitung maju tanpa batas.')
+        ]),
+        el('div', { class: 'medan' }, [
           el('label', {}, 'Lembar Kerja yang Dikerjakan di Misi Ini'),
           el('div', { class: 'keterangan', style: 'margin:0 0 8px;' },
             'Lembar yang dipilih akan tampil langsung di dalam misi, dan hanya bisa diisi murid selagi timer misi berjalan.'),
@@ -300,6 +309,7 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                 sifat_kerja: document.getElementById('t-sifat').value,
                 xp: Number(document.getElementById('t-xp').value) || 0,
                 wajib_bukti: document.getElementById('t-wajib-bukti').checked,
+                durasi_menit: Number(document.getElementById('t-durasi').value) || null,
                 lembar_kode: Array.from(document.querySelectorAll('.t-lembar-pilih'))
                   .filter(c => c.checked).map(c => c.value).join(',') || null
               };
