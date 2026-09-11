@@ -16,6 +16,11 @@ import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarK
 
 const JEDA_KETIK_MS = 500;
 
+/** Apakah isian sudah punya isi (berarti induk-induknya sudah ada di server)? */
+function sudahAdaIsi(data) {
+  return !!data && typeof data === 'object' && Object.keys(data).length > 0;
+}
+
 /** Bangun elemen DOM untuk mengisi satu lembar kerja.
  *  { lembar, isian, bisaEdit, onSimpanGagal, profil, anggotaKelompok } → HTMLElement */
 export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profil, anggotaKelompok, realtime = false, tampilanGuru = false }) {
@@ -37,16 +42,34 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
     cursor[path[path.length - 1]] = nilai;
   }
 
+  // Jalur bertingkat tidak bisa disimpan lewat perbaruiSel bila induknya
+  // belum ada di server: jsonb_set hanya membuat kunci TERAKHIR, bukan
+  // induknya. Untuk data yang masih kosong, jalur seperti ["butir","1"]
+  // (Likert) atau ["baris","0","k0"] (Matriks) dikembalikan tanpa perubahan
+  // — dan RPC-nya tetap melaporkan sukses, sehingga kegagalannya senyap.
+  //
+  // Karena itu tulisan PERTAMA pada sebuah isian dikirim utuh lewat
+  // timpaData, yang membentuk seluruh induknya sekaligus. Tulisan
+  // berikutnya kembali memakai pembaruan per sel yang jauh lebih hemat.
+  let indukSiap = sudahAdaIsi(isian.data);
+
   function ubahSel(path, nilai) {
     setNilaiPath(isian.data, path, nilai);
     saluran?.siarkanSel(path, nilai);
     const kunci = path.join('.');
     clearTimeout(waktuDebounce[kunci]);
     waktuDebounce[kunci] = setTimeout(async () => {
-      try { await perbaruiSel(isian.id, path, nilai); }
-      catch (err) { onSimpanGagal?.(err); }
+      try {
+        if (!indukSiap) {
+          await timpaData(isian.id, isian.data);
+          indukSiap = true;
+        } else {
+          await perbaruiSel(isian.id, path, nilai);
+        }
+      } catch (err) { onSimpanGagal?.(err); }
     }, JEDA_KETIK_MS);
   }
+
 
   function ubahSelDanGambarUlang(path, nilai) {
     ubahSel(path, nilai);

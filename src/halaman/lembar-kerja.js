@@ -106,14 +106,21 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
   }
 
   // ============ Simpan andal: debounce per-sel, siar langsung ============
+  // Tulisan pertama dikirim utuh agar induk jalur bertingkat terbentuk;
+  // jsonb_set tidak bisa membuat induk yang belum ada. Lihat catatan
+  // lengkapnya di src/lib/lembar-widget.js.
+  let indukSiap = !!isian?.data && Object.keys(isian.data).length > 0;
+
   function ubahSel(path, nilai) {
     setNilaiPath(isian.data, path, nilai);
     saluran?.siarkanSel(path, nilai);
     const kunci = path.join('.');
     clearTimeout(waktuDebounce[kunci]);
     waktuDebounce[kunci] = setTimeout(async () => {
-      try { await perbaruiSel(isian.id, path, nilai); }
-      catch (err) { roti(pesanGalat(err), 'galat'); }
+      try {
+        if (!indukSiap) { await timpaData(isian.id, isian.data); indukSiap = true; }
+        else { await perbaruiSel(isian.id, path, nilai); }
+      } catch (err) { roti(pesanGalat(err), 'galat'); }
     }, JEDA_KETIK_MS);
   }
 
