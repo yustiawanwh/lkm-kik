@@ -8,6 +8,7 @@ import { el, isi, roti, dialog, konfirmasi, tanggalId } from '../lib/dom.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ikon, ikonTeks } from '../lib/ikon.js';
+import { segarkanLonceng } from '../lib/lonceng-obrolan.js';
 import { teksKeHtml } from '../lib/teks.js';
 import { navigasi } from '../lib/rute.js';
 import { state } from '../main.js';
@@ -48,6 +49,7 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
       daftarBisuKanal = guru ? await daftarBisu(id) : [];
       await tandaiDibaca(id, profil.id);
       belumTerbaca.delete(id);
+      segarkanLonceng();   // lencana sidebar ikut turun
 
       lepasKanal?.();
       lepasKanal = pantauPesan(id,
@@ -55,6 +57,7 @@ export async function renderObrolan(root, { profil, onKeluar, kanalId }) {
           pesanList = await daftarPesan(id);
           petaLampiran = await lampiranUntukPesan(pesanList.map(p => p.id));
           await tandaiDibaca(id, profil.id);
+          segarkanLonceng();
           render(); gulirKeBawah();
         },
         async () => {

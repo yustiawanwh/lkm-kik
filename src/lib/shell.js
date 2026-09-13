@@ -2,6 +2,7 @@
 import { el } from './dom.js';
 import { ikon } from './ikon.js';
 import { tukarTema, temaSaatIni } from './tema.js';
+import { dengarkanLonceng } from './lonceng-obrolan.js';
 
 const MENU_GURU = [
   { hash: '#/guru', label: 'Program Inkubasi', ikon: 'program' },
@@ -55,7 +56,12 @@ export function renderShell({ profil, judulHalaman, sub, konten, onKeluar }) {
         href: item.hash,
         class: 'sidebar-tautan' + (item.hash === hashAktif ? ' aktif' : ''),
         onclick: tutupSidebar
-      }, [ikon(item.ikon, 18), el('span', {}, item.label)])
+      }, [
+        ikon(item.ikon, 18),
+        el('span', { style: 'flex:1;' }, item.label),
+        // Lencana pesan belum terbaca, hanya pada menu Obrolan.
+        item.hash === '#/obrolan' ? buatLoncengNav() : null
+      ])
     )),
     el('div', { class: 'sidebar-kaki' }, [
       el('a', {
@@ -117,4 +123,20 @@ function bukaTutupSidebar() {
 function tutupSidebar() {
   document.getElementById('sidebar-utama')?.classList.remove('terbuka');
   document.getElementById('tirai-sidebar')?.classList.remove('tampil');
+}
+
+/** Lencana angka pada menu Obrolan. Isinya mengikuti penghitung bersama,
+ *  sehingga murid langsung melihatnya dari halaman mana pun — tidak perlu
+ *  membuka Obrolan lebih dulu. */
+function buatLoncengNav() {
+  const lencana = el('span', { class: 'lonceng-nav', style: 'display:none;' }, '0');
+  const lepas = dengarkanLonceng((n) => {
+    // Bila menu sudah tidak ada di halaman, berhenti mendengarkan agar
+    // sidebar lama tidak menahan memori.
+    if (!lencana.isConnected && lencana.dataset.pernahTampil) { lepas(); return; }
+    lencana.dataset.pernahTampil = '1';
+    lencana.textContent = n > 99 ? '99+' : String(n);
+    lencana.style.display = n > 0 ? '' : 'none';
+  });
+  return lencana;
 }

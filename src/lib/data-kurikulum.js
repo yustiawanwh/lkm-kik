@@ -198,6 +198,12 @@ export async function hapusLembar(id) {
   if (error) throw error;
 }
 
+export const JENIS_DIAGNOSTIK = [
+  { nilai: 'bukan', label: 'Bukan diagnostik (lembar kerja biasa)' },
+  { nilai: 'non_kognitif', label: 'Diagnostik Non-Kognitif' },
+  { nilai: 'kognitif', label: 'Diagnostik Kognitif' }
+];
+
 export const TIPE_LEMBAR = [
   'matriks', 'daftar', 'formulir', 'referensi', 'kanvas', 'tahapan',
   'kalkulator', 'instrumen', 'likert', 'kesepakatan', 'sejawat', 'refleksi', 'sikap'

@@ -5,11 +5,15 @@ import { renderShell } from '../lib/shell.js';
 import { navigasi } from '../lib/rute.js';
 import { daftarKelasMurid, gabungKelasDenganKode, daftarPenugasanMurid } from '../lib/data-kelas.js';
 import { ambilProfil } from '../lib/data-profil.js';
+import { ringkasNilaiPenugasan } from '../lib/data-papan.js';
+import { ambilSemuaPengaturan } from '../lib/data-pengaturan.js';
 
 export async function renderMurid(root, { profil, onKeluar }) {
   let memuat = true, galat = '';
   let kelasList = [], penugasanList = [];
   let profilLengkap = true;
+  let ringkasNilai = new Map();
+  let skalaHuruf = null;
 
   async function muat() {
     memuat = true; render();
@@ -51,6 +55,46 @@ export async function renderMurid(root, { profil, onKeluar }) {
     });
   }
 
+  /** Terjemahkan angka ke huruf memakai skala yang diatur admin, supaya
+   *  sama persis dengan yang dipakai guru saat menilai. */
+  function hurufDari(nilai) {
+    if (nilai === null || !Array.isArray(skalaHuruf)) return null;
+    const urut = [...skalaHuruf].sort((a, b) => Number(b.min) - Number(a.min));
+    return urut.find(s => nilai >= Number(s.min))?.huruf || null;
+  }
+
+  function warnaNilai(n) {
+    return n >= 85 ? 'var(--hijau)' : n >= 70 ? 'var(--kuning-teks)' : 'var(--merah)';
+  }
+
+  /** Panel nilai pada kartu. Menahan diri menampilkan angka sebelum ada
+   *  yang dinilai — angka 0 akan terbaca sebagai nilai buruk, padahal
+   *  artinya guru belum sempat menilai. */
+  function panelNilai(p) {
+    const r = ringkasNilai.get(p.id);
+    if (!r || r.dikerjakan === 0) return null;
+
+    if (r.dinilai === 0) {
+      return el('div', { class: 'nilai-kartu' }, [
+        el('span', { style: 'font-size:12px;color:var(--abu-teks);' },
+          r.menunggu > 0 ? `${r.menunggu} misi menunggu dinilai guru` : 'Belum ada misi yang dinilai')
+      ]);
+    }
+
+    const huruf = hurufDari(r.rata);
+    return el('div', { class: 'nilai-kartu' }, [
+      el('div', {}, [
+        el('div', { style: 'font-size:11.5px;color:var(--abu-teks);' }, 'Nilai sementara'),
+        el('div', { style: 'font-size:12px;color:var(--abu-teks-halus);' },
+          `dari ${r.dinilai} misi yang sudah dinilai` + (r.menunggu > 0 ? ` · ${r.menunggu} menunggu` : ''))
+      ]),
+      el('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
+        huruf ? el('span', { class: 'nilai-kotak', style: `background:var(--permukaan);color:${warnaNilai(r.rata)};` }, huruf) : null,
+        el('span', { style: `font-size:22px;font-weight:700;color:${warnaNilai(r.rata)};` }, r.rata.toFixed(1))
+      ])
+    ]);
+  }
+
   function kartuPenugasan(p) {
     const sisaMs = new Date(p.tenggat).getTime() - Date.now();
     const lewat = sisaMs < 0;
@@ -63,7 +107,8 @@ export async function renderMurid(root, { profil, onKeluar }) {
         lewat ? el('span', { class: 'lencana lencana-susulan' }, 'Lewat tenggat') : null
       ]),
       el('div', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 10px;' }, p.kelas?.nama),
-      el('div', { style: 'font-size:12px;color:var(--abu-teks-halus);' }, `Tenggat: ${tanggalId(p.tenggat, true)}`)
+      el('div', { style: 'font-size:12px;color:var(--abu-teks-halus);' }, `Tenggat: ${tanggalId(p.tenggat, true)}`),
+      panelNilai(p)
     ]);
   }
 

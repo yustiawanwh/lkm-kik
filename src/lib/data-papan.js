@@ -91,6 +91,47 @@ export async function ubahStatusProgres(id, status) {
 }
 
 /** Simpan detik_terpakai — dipanggil berkala oleh timer (penyimpanan andal). */
+/** Ringkasan nilai murid pada sekumpulan penugasan, untuk ditampilkan di
+ *  kartu Papan Misi. Mencakup misi mandiri maupun misi kelompok yang murid
+ *  ini menjadi anggotanya. */
+export async function ringkasNilaiPenugasan(penugasanIds, muridId) {
+  const hasil = new Map();
+  if (!penugasanIds.length) return hasil;
+
+  // Kelompok murid ini, agar nilai misi kelompok ikut terhitung.
+  const { data: anggota, error: eA } = await supabase
+    .from('anggota_kelompok').select('kelompok_id').eq('murid_id', muridId);
+  if (eA) throw eA;
+  const idKelompok = (anggota || []).map(a => a.kelompok_id);
+
+  // Total misi tiap penugasan, untuk menunjukkan kemajuan penilaian.
+  const { data: penugasanList, error: eP } = await supabase
+    .from('penugasan').select('id, tujuan_pembelajaran_id').in('id', penugasanIds);
+  if (eP) throw eP;
+
+  const { data: progresList, error: eG } = await supabase
+    .from('progres_tugas')
+    .select('penugasan_id, nilai_angka, nilai_huruf, status, murid_id, kelompok_id')
+    .in('penugasan_id', penugasanIds);
+  if (eG) throw eG;
+
+  for (const p of penugasanList) {
+    const milikSaya = progresList.filter(g =>
+      g.penugasan_id === p.id &&
+      (g.murid_id === muridId || (g.kelompok_id && idKelompok.includes(g.kelompok_id))));
+
+    const dinilai = milikSaya.filter(g => g.status === 'selesai' && g.nilai_angka !== null);
+    const nilai = dinilai.map(g => Number(g.nilai_angka));
+    hasil.set(p.id, {
+      rata: nilai.length ? nilai.reduce((a, b) => a + b, 0) / nilai.length : null,
+      dinilai: dinilai.length,
+      dikerjakan: milikSaya.length,
+      menunggu: milikSaya.filter(g => g.status === 'review').length
+    });
+  }
+  return hasil;
+}
+
 /** Setel batas waktu hitung mundur saat timer pertama kali dijalankan. */
 export async function setelBatasWaktu(progresId, menit) {
   const batas = new Date(Date.now() + menit * 60000).toISOString();

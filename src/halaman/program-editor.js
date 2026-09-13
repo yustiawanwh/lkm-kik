@@ -14,6 +14,7 @@ import {
 } from '../lib/data-kurikulum.js';
 import { daftarBadgeProgram, buatBadge, updateBadge, hapusBadge } from '../lib/data-asesmen.js';
 import { buatPembangunLembar } from '../lib/pembangun-lembar.js';
+import { JENIS_DIAGNOSTIK } from '../lib/data-kurikulum.js';
 import { daftarPenugasanProgram, tutupSemuaPenugasanProgram } from '../lib/data-kelas.js';
 
 export async function renderProgramEditor(root, { profil, onKeluar, programId }) {
@@ -70,6 +71,14 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
           el('div', { class: 'keterangan' }, 'Tampil di Papan Misi murid, pada panel "Petunjuk & Materi Awal".')
         ]),
         el('div', { class: 'medan' }, [
+          el('label', { style: 'display:flex;align-items:center;gap:8px;cursor:pointer;' }, [
+            el('input', { type: 'checkbox', id: 'e-wajib-diagnostik', checked: !!program.wajib_diagnostik }),
+            el('span', {}, 'Wajibkan asesmen diagnostik sebelum mengerjakan misi')
+          ]),
+          el('div', { class: 'keterangan' },
+            'Murid tidak bisa memulai misi maupun mengisi lembar kerja sebelum seluruh lembar bertanda diagnostik diselesaikan. Penguncian ini ditegakkan di database, bukan sekadar disembunyikan.')
+        ]),
+        el('div', { class: 'medan' }, [
           el('label', {}, 'Materi Awal / Bahan Rujukan'),
           el('textarea', { id: 'e-materi' }, program.materi_awal || ''),
           el('div', { class: 'keterangan' }, 'Cocok untuk daftar rujukan yang perlu dibaca murid, mis. daftar bidang masalah tiap kelompok. Mendukung **tebal**, *miring*, daftar berbutir (-), dan daftar bernomor (1.).')
@@ -86,7 +95,8 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                   total_jp: Number(document.getElementById('e-jp').value) || null,
                   deskripsi: document.getElementById('e-deskripsi').value.trim() || null,
                   petunjuk_umum: document.getElementById('e-petunjuk').value.trim() || null,
-                  materi_awal: document.getElementById('e-materi').value.trim() || null
+                  materi_awal: document.getElementById('e-materi').value.trim() || null,
+                  wajib_diagnostik: document.getElementById('e-wajib-diagnostik').checked
                 });
                 tutup(); roti('Program diperbarui.', 'sukses'); render();
               } catch (err) { roti(pesanGalat(err), 'galat'); }
@@ -399,6 +409,7 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                 kode, judul,
                 keterangan: document.getElementById('l-keterangan').value.trim() || null,
                 tipe: document.getElementById('l-tipe').value,
+                diagnostik: document.getElementById('l-diagnostik').value,
                 milik_kelompok: document.getElementById('l-kelompok').checked,
                 baris_dinamis: document.getElementById('l-baris-dinamis').checked,
                 perlu_persetujuan: document.getElementById('l-persetujuan').checked,

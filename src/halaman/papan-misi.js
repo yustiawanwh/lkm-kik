@@ -10,7 +10,7 @@ import {
   ambilPenugasan, ambilStrukturProgram, ambilKelompokSaya,
   ambilProgresPenugasan, ambilAtauBuatProgres, ubahStatusProgres, simpanDetikTerpakai
 } from '../lib/data-papan.js';
-import { daftarLembarProgram, ambilAtauBuatIsian, anggotaKelompokLembar } from '../lib/data-lembar.js';
+import { daftarLembarProgram, ambilAtauBuatIsian, anggotaKelompokLembar, tandaiDiagnostikSelesai } from '../lib/data-lembar.js';
 import { LABEL_TIPE_LEMBAR } from '../lib/data-kurikulum.js';
 import { buatWidgetLembar } from '../lib/lembar-widget.js';
 import { daftarLampiran, tambahLampiran, hapusLampiran } from '../lib/data-lampiran.js';
@@ -51,6 +51,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let penugasan = null, sprints = [], kelompokSaya = null, progresMap = new Map(); // tugasId -> progres row
   let lembarList = [];
   let lembarLepas = [];
+  let lembarDiagnostik = [], isianDiagnostik = new Map();
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
@@ -77,7 +78,25 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         sprints.flatMap(sp => sp.tugas).flatMap(t =>
           (t.lembar_kode || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean))
       );
-      lembarLepas = lembarList.filter(l => !kodeTertaut.has(l.kode.toLowerCase()));
+      lembarDiagnostik = lembarList
+        .filter(l => l.diagnostik && l.diagnostik !== 'bukan')
+        .sort((a, b) => (a.urutan ?? 0) - (b.urutan ?? 0));
+      // Lembar diagnostik punya panelnya sendiri, jadi tidak ikut di tab
+      // Lembar Lepas maupun di daftar lembar tertaut misi.
+      lembarLepas = lembarList.filter(l =>
+        !kodeTertaut.has(l.kode.toLowerCase()) &&
+        (!l.diagnostik || l.diagnostik === 'bukan'));
+
+      isianDiagnostik = new Map();
+      for (const l of lembarDiagnostik) {
+        try {
+          const isian = await ambilAtauBuatIsian({
+            lembarKerjaId: l.id, penugasanId, milikKelompok: l.milik_kelompok,
+            muridId: profil.id, kelompokId: kelompokSaya?.id
+          });
+          isianDiagnostik.set(l.id, isian);
+        } catch { /* mis. lembar kelompok padahal murid belum berkelompok */ }
+      }
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       modeRefleksiPerTahap = await refleksiPerTahap(penugasan.tujuan_pembelajaran_id);
       rubrikProgram = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
@@ -796,6 +815,97 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
 
   /** Petunjuk Umum & Materi Awal dari program — sebelumnya tersimpan tapi
    *  tidak pernah terlihat murid. */
+  const LABEL_DIAGNOSTIK = { non_kognitif: 'Non-Kognitif', kognitif: 'Kognitif' };
+
+  function diagnostikBelumTuntas() {
+    return lembarDiagnostik.filter(l => !isianDiagnostik.get(l.id)?.selesai_pada);
+  }
+
+  /** Panel asesmen diagnostik, tampil di atas daftar misi. */
+  function gambarPanelDiagnostik() {
+    if (lembarDiagnostik.length === 0) return null;
+    const belum = diagnostikBelumTuntas();
+    const wajib = !!penugasan?.tujuan_pembelajaran?.wajib_diagnostik;
+    const terkunci = wajib && belum.length > 0;
+
+    return el('div', {
+      class: 'kartu panel-diagnostik' + (terkunci ? ' diagnostik-terkunci' : ''),
+      style: 'margin-bottom:16px;'
+    }, [
+      el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;' }, [
+        el('h3', {}, 'Asesmen Diagnostik'),
+        el('span', { class: 'lencana' }, `${lembarDiagnostik.length - belum.length} dari ${lembarDiagnostik.length} selesai`)
+      ]),
+      el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-bottom:12px;' },
+        terkunci
+          ? 'Selesaikan asesmen berikut lebih dulu. Misi terkunci sampai semuanya tuntas.'
+          : belum.length > 0
+            ? 'Asesmen ini membantu gurumu mengenali kesiapanmu. Tidak dinilai benar atau salah.'
+            : 'Terima kasih, seluruh asesmen sudah kamu selesaikan.'),
+
+      el('div', { class: 'daftar-baris' }, lembarDiagnostik.map(l => {
+        const isian = isianDiagnostik.get(l.id);
+        const selesai = !!isian?.selesai_pada;
+        return el('div', { class: 'baris-item' }, [
+          el('span', { class: 'lencana' }, LABEL_DIAGNOSTIK[l.diagnostik] || 'Diagnostik'),
+          el('div', { class: 'isi-utama' }, [
+            el('div', { class: 'judul-baris' }, l.judul),
+            selesai
+              ? el('div', { class: 'meta-baris' }, `Selesai ${tanggalId(isian.selesai_pada, true)}`)
+              : (l.keterangan ? el('div', { class: 'meta-baris' }, l.keterangan) : null)
+          ]),
+          el('button', {
+            class: selesai ? 'tombol tombol-hantu tombol-kecil' : 'tombol tombol-primer tombol-kecil',
+            onclick: () => bukaDialogDiagnostik(l)
+          }, selesai ? 'Lihat / Ubah' : 'Kerjakan')
+        ]);
+      }))
+    ]);
+  }
+
+  function bukaDialogDiagnostik(l) {
+    const isian = isianDiagnostik.get(l.id);
+    if (!isian) {
+      roti('Asesmen ini dikerjakan berkelompok, tetapi Anda belum tergabung di kelompok manapun.', 'galat');
+      return;
+    }
+    const selesai = !!isian.selesai_pada;
+    const widget = buatWidgetLembar({
+      lembar: l, isian, bisaEdit: true, profil,
+      anggotaKelompok: [], realtime: false,
+      onSimpanGagal: (err) => roti(pesanGalat(err), 'galat')
+    });
+
+    const { tutup } = dialog({
+      judul: l.judul,
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+          l.diagnostik === 'kognitif'
+            ? 'Jawab sebisamu. Asesmen ini untuk mengetahui bekal awalmu, bukan untuk dinilai.'
+            : 'Jawab dengan jujur. Tidak ada jawaban benar atau salah.'),
+        widget.elemen,
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:16px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => { widget.lepas(); tutup(); } }, 'Tutup'),
+          el('button', {
+            class: 'tombol tombol-primer',
+            onclick: async () => {
+              try {
+                // Beri jeda agar simpanan terakhir sempat terkirim sebelum
+                // ditandai selesai.
+                await new Promise(r => setTimeout(r, 600));
+                const baru = await tandaiDiagnostikSelesai(isian.id);
+                isianDiagnostik.set(l.id, baru);
+                widget.lepas(); tutup();
+                roti('Asesmen ditandai selesai.', 'sukses');
+                render();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, selesai ? 'Simpan Perubahan' : 'Selesai')
+        ])
+      ])
+    });
+  }
+
   function gambarPetunjuk() {
     const tp = penugasan?.tujuan_pembelajaran;
     const punya = tp?.petunjuk_umum || tp?.materi_awal || tp?.deskripsi;
@@ -880,6 +990,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         kendali === 'dijeda' ? el('div', { class: 'panel-info', style: 'margin-bottom:16px;background:var(--kuning-lembut);border-color:#ffe380;color:#974F00;' }, 'Akses Anda sedang dijeda oleh guru — Anda bisa melihat, tapi tidak bisa memulai misi baru sampai diaktifkan kembali.') : null,
         gambarStatusTenggat(),
         gambarPetunjuk(),
+        gambarPanelDiagnostik(),
         gambarRingkasProgres(),
         kelompokSaya ? el('div', { class: 'panel-info', style: 'margin-bottom:16px;' }, `Kelompok Anda: ${kelompokSaya.nama}`) : null,
         el('div', { class: 'deret-tab' }, [
@@ -888,7 +999,10 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
           gambarTabTombol('sejawat', 'Nilai Rekan'),
           gambarTabTombol('refleksi', 'Refleksi')
         ]),
-        tab === 'misi' ? gambarTabMisi()
+        (tab === 'misi' && penugasan?.tujuan_pembelajaran?.wajib_diagnostik && diagnostikBelumTuntas().length > 0)
+          ? el('div', { class: 'kartu-kosong' },
+              `Misi terkunci sampai ${diagnostikBelumTuntas().length} asesmen diagnostik di atas diselesaikan.`)
+        : tab === 'misi' ? gambarTabMisi()
           : (tab === 'lembar' && lembarLepas.length > 0) ? gambarTabLembar()
           : tab === 'sejawat' ? gambarTabSejawat()
           : gambarTabRefleksi()

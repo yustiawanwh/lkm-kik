@@ -6,11 +6,13 @@ import { el, isi, tanggalId } from '../lib/dom.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
-import { rangkumanSejawatGuru, daftarRefleksiPenugasan, daftarSikapKelas, promptRefleksiProgram, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
+import { rangkumanSejawatGuru, daftarRefleksiPenugasan, daftarSikapKelas, promptRefleksiProgram, INDIKATOR_SIKAP, hasilDiagnostik } from '../lib/data-asesmen.js';
+import { buatWidgetLembar } from '../lib/lembar-widget.js';
 
 export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId }) {
   let memuat = true, galat = '', tab = 'sejawat';
   let penugasan = null, sejawat = [], refleksi = [], sikap = [], promptRefleksi = [];
+  let diagnostik = { lembar: [], isian: [] };
 
   async function muatSemua() {
     memuat = true; render();
@@ -20,6 +22,7 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
       refleksi = await daftarRefleksiPenugasan(penugasanId);
       sikap = await daftarSikapKelas(penugasan.kelas_id);
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
+      diagnostik = await hasilDiagnostik(penugasanId, penugasan.tujuan_pembelajaran_id).catch(() => ({ lembar: [], isian: [] }));
     } catch (err) { galat = pesanGalat(err); }
     finally { memuat = false; render(); }
   }
@@ -97,6 +100,43 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
     ])));
   }
 
+  /** Hasil asesmen diagnostik per murid, dikelompokkan per lembar. */
+  function gambarDiagnostik() {
+    if (diagnostik.lembar.length === 0) {
+      return el('div', { class: 'kartu-kosong' },
+        'Program ini belum punya lembar bertanda diagnostik. Tandai lembar sebagai diagnostik lewat Penyunting Program.');
+    }
+    return el('div', {}, diagnostik.lembar.map(l => {
+      const isian = diagnostik.isian
+        .filter(i => i.lembar_kerja_id === l.id)
+        .sort((a, b) => (a.profil?.no_absen ?? 999) - (b.profil?.no_absen ?? 999));
+      const selesai = isian.filter(i => i.selesai_pada).length;
+
+      return el('div', { style: 'margin-bottom:20px;' }, [
+        el('div', { class: 'judul-grup' }, [
+          el('span', {}, `${l.kode} — ${l.judul}`),
+          el('span', { class: 'lencana' },
+            `${l.diagnostik === 'kognitif' ? 'Kognitif' : 'Non-Kognitif'} · ${selesai} selesai`)
+        ]),
+        isian.length === 0
+          ? el('div', { class: 'kartu-kosong' }, 'Belum ada murid yang mengerjakan.')
+          : el('div', {}, isian.map(i => el('details', { class: 'rujukan-sejawat' }, [
+              el('summary', {}, [
+                (i.profil?.no_absen ? `${i.profil.no_absen}. ` : '') +
+                (i.profil?.nama || i.kelompok?.nama || 'Murid') +
+                (i.selesai_pada ? '' : '  (belum ditandai selesai)')
+              ].join('')),
+              el('div', { style: 'margin-top:8px;' }, [
+                buatWidgetLembar({
+                  lembar: l, isian: i, bisaEdit: false, profil: null,
+                  anggotaKelompok: [], tampilanGuru: true
+                }).elemen
+              ])
+            ])))
+      ]);
+    }));
+  }
+
   function gambarTabTombol(kunci, label) {
     const aktif = tab === kunci;
     return el('button', {
@@ -112,10 +152,13 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
         ? el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah);' }, galat)
         : el('div', {}, [
             el('div', { class: 'deret-tab' }, [
+              diagnostik.lembar.length > 0
+                ? gambarTabTombol('diagnostik', `Diagnostik (${diagnostik.lembar.length})`) : null,
               gambarTabTombol('sejawat', 'Nilai Sejawat'),
               gambarTabTombol('refleksi', `Refleksi (${refleksi.length})`),
               gambarTabTombol('sikap', `Observasi Sikap (${sikap.length})`)
             ]),
+            tab === 'diagnostik' ? gambarDiagnostik() :
             tab === 'sejawat' ? gambarSejawat() : tab === 'refleksi' ? gambarRefleksi() : gambarSikap()
           ]);
 

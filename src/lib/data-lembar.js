@@ -37,6 +37,14 @@ export async function misiPenaut(lembar, tujuanPembelajaranId) {
   ) || null;
 }
 
+/** Tandai lembar diagnostik sebagai selesai dikerjakan murid. */
+export async function tandaiDiagnostikSelesai(isianId) {
+  const { data, error } = await supabase.from('isian_lembar')
+    .update({ selesai_pada: new Date().toISOString() }).eq('id', isianId).select().single();
+  if (error) throw error;
+  return data;
+}
+
 export async function anggotaKelompokLembar(kelompokId) {
   const { data, error } = await supabase
     .from('anggota_kelompok').select('*, profil:murid_id(nama)').eq('kelompok_id', kelompokId);

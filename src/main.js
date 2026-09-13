@@ -9,6 +9,7 @@
 
 import { supabase } from './lib/supabase.js';
 import { siapkanTema } from './lib/tema.js';
+import { mulaiLonceng, hentikanLonceng } from './lib/lonceng-obrolan.js';
 import { el, isi, roti } from './lib/dom.js';
 import { renderMasuk } from './halaman/masuk.js';
 import { renderShell } from './lib/shell.js';
@@ -207,6 +208,9 @@ async function mulai() {
     if (session?.user) {
       state.sesi = session;
       state.profil = await muatProfil(session.user.id);
+      // Sesi yang sudah ada saat aplikasi dibuka juga perlu menyalakan
+      // lonceng; tanpa ini angka baru muncul setelah pengguna masuk ulang.
+      mulaiLonceng(state.profil);
     }
   } catch (err) {
     console.error('Gagal memuat sesi awal:', err);
@@ -221,6 +225,7 @@ async function mulai() {
   supabase.auth.onAuthStateChange((event, sesiBaru) => {
     state.sesi = sesiBaru;
     if (event === 'SIGNED_OUT') {
+      hentikanLonceng();
       bersihkanKanalRealtime();
       state.profil = null;
       state.kelompok = null;
@@ -247,6 +252,7 @@ async function mulai() {
       setTimeout(async () => {
         try {
           state.profil = await muatProfil(sesiBaru.user.id);
+          mulaiLonceng(state.profil);
           window.location.hash = rutePerPeran();
           route();
         } catch (err) {

@@ -57,6 +57,26 @@ export async function sejawatMurid(kelasId, muridId) {
   return data.map(b => ({ ...b, tujuan_pembelajaran: petaTp.get(b.penugasan_id) || null }));
 }
 
+/** Guru: hasil asesmen diagnostik seluruh murid pada satu penugasan. */
+export async function hasilDiagnostik(penugasanId, tujuanPembelajaranId) {
+  const { data: lembar, error: e1 } = await supabase
+    .from('lembar_kerja').select('*')
+    .eq('tujuan_pembelajaran_id', tujuanPembelajaranId)
+    .neq('diagnostik', 'bukan')
+    .order('urutan');
+  if (e1) throw e1;
+  if (!lembar.length) return { lembar: [], isian: [] };
+
+  const { data: isian, error: e2 } = await supabase
+    .from('isian_lembar')
+    .select('*, profil:murid_id(nama, no_absen), kelompok:kelompok_id(nama)')
+    .eq('penugasan_id', penugasanId)
+    .in('lembar_kerja_id', lembar.map(l => l.id));
+  if (e2) throw e2;
+
+  return { lembar, isian };
+}
+
 /** Guru: semua refleksi murid pada satu penugasan. */
 export async function daftarRefleksiPenugasan(penugasanId) {
   const { data, error } = await supabase
