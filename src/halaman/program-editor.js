@@ -374,6 +374,14 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
           el('label', {}, 'Keterangan untuk Murid'),
           el('textarea', { id: 'l-keterangan' }, lembarLama?.keterangan || '')
         ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Peran Lembar Ini'),
+          el('select', { id: 'l-diagnostik' }, JENIS_DIAGNOSTIK.map(d =>
+            el('option', { value: d.nilai, selected: (lembarLama?.diagnostik ?? 'bukan') === d.nilai }, d.label))),
+          el('div', { class: 'keterangan' },
+            'Lembar diagnostik tampil di panel tersendiri di atas daftar misi murid, dan tidak ikut dinilai. ' +
+            'Bila program disetel mewajibkannya, misi terkunci sampai diagnostik diselesaikan.')
+        ]),
         el('div', { class: 'medan', style: 'display:flex;align-items:center;gap:8px;' }, [
           el('input', { type: 'checkbox', id: 'l-kelompok', checked: lembarLama?.milik_kelompok || false }),
           el('label', { style: 'margin:0;' }, 'Dikerjakan bersama satu kelompok (bukan individu)')
