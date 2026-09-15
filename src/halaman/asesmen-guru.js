@@ -13,6 +13,7 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
   let memuat = true, galat = '', tab = 'sejawat';
   let penugasan = null, sejawat = [], refleksi = [], sikap = [], promptRefleksi = [];
   let diagnostik = { lembar: [], isian: [] };
+  let galatDiagnostik = '';
 
   async function muatSemua() {
     memuat = true; render();
@@ -22,7 +23,15 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
       refleksi = await daftarRefleksiPenugasan(penugasanId);
       sikap = await daftarSikapKelas(penugasan.kelas_id);
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
-      diagnostik = await hasilDiagnostik(penugasanId, penugasan.tujuan_pembelajaran_id).catch(() => ({ lembar: [], isian: [] }));
+      // Galat sengaja DISIMPAN, bukan ditelan — tanpa ini, migrasi yang
+      // belum dijalankan hanya membuat tab hilang tanpa penjelasan apa pun.
+      try {
+        diagnostik = await hasilDiagnostik(penugasanId, penugasan.tujuan_pembelajaran_id);
+        galatDiagnostik = '';
+      } catch (err) {
+        diagnostik = { lembar: [], isian: [] };
+        galatDiagnostik = pesanGalat(err);
+      }
     } catch (err) { galat = pesanGalat(err); }
     finally { memuat = false; render(); }
   }
@@ -102,9 +111,17 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
 
   /** Hasil asesmen diagnostik per murid, dikelompokkan per lembar. */
   function gambarDiagnostik() {
+    if (galatDiagnostik) {
+      return el('div', {}, [
+        el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah-teks);border-color:transparent;margin-bottom:12px;' },
+          `Gagal memuat asesmen diagnostik: ${galatDiagnostik}`),
+        el('div', { class: 'kartu-kosong' },
+          'Bila pesan di atas menyebut kolom "diagnostik" tidak ditemukan, berarti migrasi 002900_asesmen_diagnostik.sql belum dijalankan di Supabase. Jalankan migrasi itu lalu muat ulang halaman ini.')
+      ]);
+    }
     if (diagnostik.lembar.length === 0) {
       return el('div', { class: 'kartu-kosong' },
-        'Program ini belum punya lembar bertanda diagnostik. Tandai lembar sebagai diagnostik lewat Penyunting Program.');
+        'Program ini belum punya lembar bertanda diagnostik. Buka Penyunting Program → tab Lembar Kerja → pilih lembarnya → atur "Peran Lembar Ini" menjadi Diagnostik Non-Kognitif atau Kognitif.');
     }
     return el('div', {}, diagnostik.lembar.map(l => {
       const isian = diagnostik.isian
@@ -152,8 +169,8 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
         ? el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah);' }, galat)
         : el('div', {}, [
             el('div', { class: 'deret-tab' }, [
-              diagnostik.lembar.length > 0
-                ? gambarTabTombol('diagnostik', `Diagnostik (${diagnostik.lembar.length})`) : null,
+              gambarTabTombol('diagnostik',
+                diagnostik.lembar.length > 0 ? `Diagnostik (${diagnostik.lembar.length})` : 'Diagnostik'),
               gambarTabTombol('sejawat', 'Nilai Sejawat'),
               gambarTabTombol('refleksi', `Refleksi (${refleksi.length})`),
               gambarTabTombol('sikap', `Observasi Sikap (${sikap.length})`)

@@ -51,7 +51,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let penugasan = null, sprints = [], kelompokSaya = null, progresMap = new Map(); // tugasId -> progres row
   let lembarList = [];
   let lembarLepas = [];
-  let lembarDiagnostik = [], isianDiagnostik = new Map();
+  let lembarDiagnostik = [], isianDiagnostik = new Map(), galatDiagnostik = '';
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
@@ -95,7 +95,11 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
             muridId: profil.id, kelompokId: kelompokSaya?.id
           });
           isianDiagnostik.set(l.id, isian);
-        } catch { /* mis. lembar kelompok padahal murid belum berkelompok */ }
+        } catch (err) {
+          // Jangan ditelan: murid perlu tahu kenapa asesmennya tidak bisa
+          // dibuka — mis. lembar kelompok padahal ia belum berkelompok.
+          galatDiagnostik = pesanGalat(err);
+        }
       }
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       modeRefleksiPerTahap = await refleksiPerTahap(penugasan.tujuan_pembelajaran_id);
@@ -836,6 +840,10 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         el('h3', {}, 'Asesmen Diagnostik'),
         el('span', { class: 'lencana' }, `${lembarDiagnostik.length - belum.length} dari ${lembarDiagnostik.length} selesai`)
       ]),
+      galatDiagnostik
+        ? el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah-teks);border-color:transparent;margin-bottom:10px;' },
+            `Sebagian asesmen tidak bisa dibuka: ${galatDiagnostik}`)
+        : null,
       el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-bottom:12px;' },
         terkunci
           ? 'Selesaikan asesmen berikut lebih dulu. Misi terkunci sampai semuanya tuntas.'
