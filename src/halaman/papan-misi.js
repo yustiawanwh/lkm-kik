@@ -21,6 +21,8 @@ import {
 import { ambilKendaliSaya } from '../lib/data-kelas.js';
 import { pantauKendali } from '../lib/realtime-kendali.js';
 import { ambilRubrikProgram } from '../lib/data-nilai.js';
+import { daftarTanggapanPameran, kirimTanggapanPameran, JENIS_TANGGAPAN } from '../lib/data-asesmen.js';
+import { daftarKelompok } from '../lib/data-kelas.js';
 import { setelBatasWaktu } from '../lib/data-papan.js';
 import { pasangSeret, baruSajaDiseret } from '../lib/seret.js';
 import { state } from '../main.js';
@@ -52,6 +54,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let lembarList = [];
   let lembarLepas = [];
   let lembarDiagnostik = [], isianDiagnostik = new Map(), galatDiagnostik = '';
+  let tanggapanList = [], kelompokKelas = [];
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
@@ -104,6 +107,14 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       modeRefleksiPerTahap = await refleksiPerTahap(penugasan.tujuan_pembelajaran_id);
       rubrikProgram = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
+      if (penugasan.tujuan_pembelajaran?.pameran_aktif) {
+        try {
+          [tanggapanList, kelompokKelas] = await Promise.all([
+            daftarTanggapanPameran(penugasanId),
+            daftarKelompok(penugasan.kelas_id)
+          ]);
+        } catch (err) { roti(pesanGalat(err), 'galat'); }
+      }
 
       const kendaliRow = await ambilKendaliSaya(penugasan.kelas_id, profil.id);
       kendali = kendaliRow?.kendali || 'aktif';
@@ -914,6 +925,102 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
     });
   }
 
+  // ---------- Papan Tanggapan Pameran Gagasan ----------
+  const WARNA_TANGGAPAN = { pujian: 'tanggapan-pujian', pertanyaan: 'tanggapan-pertanyaan', saran: 'tanggapan-saran' };
+
+  function gambarTabPameran() {
+    if (kelompokKelas.length === 0) {
+      return el('div', { class: 'kartu-kosong' }, 'Belum ada kelompok di kelas ini.');
+    }
+    const lain = kelompokKelas.filter(k => k.id !== kelompokSaya?.id);
+
+    return el('div', {}, [
+      el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
+        'Kunjungi karya kelompok lain, lalu tinggalkan tanggapan. Aturannya: tulis dulu, ' +
+        'tidak ada gagasan yang ditertawakan, dan kritik disampaikan sebagai "Bagaimana jika ...?". ' +
+        'Kamu tidak bisa menanggapi kelompokmu sendiri.'),
+
+      kelompokSaya ? el('div', { style: 'margin-bottom:18px;' }, [
+        el('div', { class: 'judul-grup' }, [
+          el('span', {}, `Tanggapan untuk ${kelompokSaya.nama}`),
+          el('span', { class: 'lencana' },
+            String(tanggapanList.filter(t => t.kelompok_tujuan === kelompokSaya.id && !t.disembunyikan).length))
+        ]),
+        gambarDaftarTanggapan(kelompokSaya.id, false)
+      ]) : null,
+
+      ...lain.map(k => el('div', { style: 'margin-bottom:18px;' }, [
+        el('div', { class: 'judul-grup' }, [
+          el('span', {}, k.nama),
+          el('button', {
+            class: 'tombol tombol-primer tombol-kecil',
+            onclick: () => bukaDialogTanggapan(k)
+          }, '+ Beri Tanggapan')
+        ]),
+        gambarDaftarTanggapan(k.id, true)
+      ]))
+    ]);
+  }
+
+  function gambarDaftarTanggapan(kelompokId, ringkas) {
+    const isi = tanggapanList.filter(t => t.kelompok_tujuan === kelompokId && !t.disembunyikan);
+    if (isi.length === 0) {
+      return el('div', { style: 'font-size:13px;color:var(--abu-teks-halus);padding:6px 2px;' },
+        ringkas ? 'Belum ada tanggapan.' : 'Belum ada tanggapan dari kelompok lain.');
+    }
+    return el('div', { class: 'papan-tanggapan' }, JENIS_TANGGAPAN.map(j => {
+      const milikJenis = isi.filter(t => t.jenis === j.nilai);
+      return el('div', { class: `kolom-tanggapan ${WARNA_TANGGAPAN[j.nilai]}` }, [
+        el('div', { style: 'font-weight:700;font-size:12.5px;margin-bottom:2px;' }, j.label),
+        el('div', { style: 'font-size:11.5px;opacity:.75;margin-bottom:8px;' }, j.tanya),
+        ...milikJenis.map(t => el('div', { class: 'catatan-tempel' }, [
+          el('div', { html: teksKeHtml(t.isi) }),
+          el('div', { style: 'font-size:11px;opacity:.7;margin-top:4px;' },
+            `${t.penulis?.nama || 'Murid'}${t.kelompok_asal?.nama ? ` · ${t.kelompok_asal.nama}` : ''}`)
+        ])),
+        milikJenis.length === 0
+          ? el('div', { style: 'font-size:11.5px;opacity:.6;' }, '—') : null
+      ]);
+    }));
+  }
+
+  function bukaDialogTanggapan(k) {
+    const { tutup } = dialog({
+      judul: `Tanggapan untuk ${k.nama}`,
+      isi: el('div', {}, [
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Jenis Tanggapan'),
+          el('select', { id: 'tg-jenis' }, JENIS_TANGGAPAN.map(j =>
+            el('option', { value: j.nilai }, `${j.label} — ${j.tanya}`)))
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Tanggapanmu'),
+          el('textarea', { id: 'tg-isi', style: 'min-height:90px;',
+            placeholder: 'Sebutkan hal yang kamu amati, bukan penilaian tentang orangnya.' })
+        ]),
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          el('button', {
+            class: 'tombol tombol-primer',
+            onclick: async () => {
+              const teks = document.getElementById('tg-isi').value.trim();
+              if (!teks) { roti('Tanggapan tidak boleh kosong.', 'galat'); return; }
+              try {
+                const baru = await kirimTanggapanPameran({
+                  penugasanId, kelompokTujuan: k.id, penulisId: profil.id,
+                  kelompokPenulis: kelompokSaya?.id || null,
+                  jenis: document.getElementById('tg-jenis').value, isi: teks
+                });
+                tanggapanList.push(baru);
+                tutup(); roti('Tanggapan terkirim.', 'sukses'); render();
+              } catch (err) { roti(pesanGalat(err), 'galat'); }
+            }
+          }, 'Kirim')
+        ])
+      ])
+    });
+  }
+
   function gambarPetunjuk() {
     const tp = penugasan?.tujuan_pembelajaran;
     const punya = tp?.petunjuk_umum || tp?.materi_awal || tp?.deskripsi;
@@ -1005,11 +1112,14 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
           gambarTabTombol('misi', 'Misi'),
           lembarLepas.length > 0 ? gambarTabTombol('lembar', `Lembar Lepas (${lembarLepas.length})`) : null,
           gambarTabTombol('sejawat', 'Nilai Rekan'),
+          penugasan?.tujuan_pembelajaran?.pameran_aktif
+            ? gambarTabTombol('pameran', 'Pameran') : null,
           gambarTabTombol('refleksi', 'Refleksi')
         ]),
         (tab === 'misi' && penugasan?.tujuan_pembelajaran?.wajib_diagnostik && diagnostikBelumTuntas().length > 0)
           ? el('div', { class: 'kartu-kosong' },
               `Misi terkunci sampai ${diagnostikBelumTuntas().length} asesmen diagnostik di atas diselesaikan.`)
+        : tab === 'pameran' ? gambarTabPameran()
         : tab === 'misi' ? gambarTabMisi()
           : (tab === 'lembar' && lembarLepas.length > 0) ? gambarTabLembar()
           : tab === 'sejawat' ? gambarTabSejawat()

@@ -13,7 +13,7 @@ import {
 } from '../lib/data-kelas.js';
 import { daftarSusulanPenugasan, beriSusulan, cabutSusulan } from '../lib/data-susulan.js';
 import { ambilStrukturProgram } from '../lib/data-papan.js';
-import { simpanObservasiSikap, INDIKATOR_SIKAP } from '../lib/data-asesmen.js';
+import { simpanObservasiSikap, INDIKATOR_SIKAP, indikatorSikapProgram, SKALA_SIKAP_BAWAAN } from '../lib/data-asesmen.js';
 import { ubahKendaliMurid, ubahAktifPendaftaran, hitungPekerjaanMurid, keluarkanMuridDariKelas } from '../lib/data-kelas.js';
 import { updateProfil } from '../lib/data-profil.js';
 import { bukaKanalPrivat, daftarKanal } from '../lib/data-obrolan.js';
@@ -414,6 +414,16 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
       .map(p => [p.tujuan_pembelajaran.id, p.tujuan_pembelajaran])).values()];
 
     let tpTerpilih = riwayat[0]?.tujuan_pembelajaran_id || '';
+    // Indikator mengikuti program: modul ajar yang memakai rubrik
+    // pengamatan berbeda bisa menetapkan aspeknya sendiri.
+    let indikator = INDIKATOR_SIKAP, skalaSikap = SKALA_SIKAP_BAWAAN;
+    async function muatIndikator() {
+      try {
+        const r = await indikatorSikapProgram(tpTerpilih || null);
+        indikator = r.indikator; skalaSikap = r.skala;
+      } catch { indikator = INDIKATOR_SIKAP; skalaSikap = SKALA_SIKAP_BAWAAN; }
+    }
+    await muatIndikator();
     let sedangSunting = riwayat.find(r => (r.tujuan_pembelajaran_id || '') === tpTerpilih) || null;
 
     const wadah = el('div', {});
@@ -429,11 +439,21 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
       gambar();
     }
 
+    /** Indikator yang ditampilkan: milik program, ditambah kunci yang sudah
+     *  ada pada catatan lama supaya datanya tidak lenyap dari pandangan. */
+    function indikatorTampil() {
+      const peta = new Map(indikator.map(i => [i.key, i]));
+      for (const k of Object.keys(sedangSunting?.skor || {})) {
+        if (!peta.has(k)) peta.set(k, { key: k, label: `${k} (dari catatan lama)` });
+      }
+      return [...peta.values()];
+    }
+
     function bacaSkor() {
       const skor = {};
-      for (const ind of INDIKATOR_SIKAP) {
+      for (const ind of indikatorTampil()) {
         const n = Number(document.getElementById(`sk-${ind.key}`).value);
-        skor[ind.key] = Number.isFinite(n) ? Math.max(1, Math.min(5, n)) : 4;
+        skor[ind.key] = Number.isFinite(n) ? Math.max(1, Math.min(skalaSikap, n)) : Math.round(skalaSikap * 0.8);
       }
       return skor;
     }
@@ -444,7 +464,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
       if (!kotak) return;
       const skor = bacaSkor();
       const nilai = Object.values(skor);
-      const persen = (nilai.reduce((a, b) => a + b, 0) / nilai.length) / 5 * 100;
+      const persen = (nilai.reduce((a, b) => a + b, 0) / nilai.length) / skalaSikap * 100;
       const diLuar = persen < rentangSaran.min || persen > rentangSaran.maks;
       kotak.textContent = `Menghasilkan nilai afektif ${persen.toFixed(1)}` +
         (rentangSaran.aktif !== false
@@ -513,7 +533,12 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
           el('label', {}, 'Berlaku untuk'),
           el('select', {
             id: 'sk-tp',
-            onchange: (e) => { tpTerpilih = e.target.value; sedangSunting = catatanUntukTp(tpTerpilih); gambar(); }
+            onchange: async (e) => {
+              tpTerpilih = e.target.value;
+              sedangSunting = catatanUntukTp(tpTerpilih);
+              await muatIndikator();
+              gambar();
+            }
           }, [
             el('option', { value: '', selected: tpTerpilih === '' }, 'Umum — semua TP'),
             ...daftarTp.map(tp => el('option', { value: tp.id, selected: tp.id === tpTerpilih },
@@ -534,12 +559,12 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
         // bulat, menerapkan saran 5 menghasilkan afektif 100 — melampaui
         // batas atas yang diatur admin. Pecahan membuat hasilnya benar-benar
         // jatuh di dalam rentang.
-        el('div', { class: 'baris-medan' }, INDIKATOR_SIKAP.map(ind => el('div', { class: 'medan' }, [
+        el('div', { class: 'baris-medan' }, indikatorTampil().map(ind => el('div', { class: 'medan' }, [
           el('label', {}, ind.label),
           el('input', {
-            id: `sk-${ind.key}`, type: 'number', min: '1', max: '5', step: '0.25',
+            id: `sk-${ind.key}`, type: 'number', min: '1', max: String(skalaSikap), step: '0.25',
             value: Number.isFinite(Number(sedangSunting?.skor?.[ind.key]))
-              ? Number(sedangSunting.skor[ind.key]) : 4,
+              ? Number(sedangSunting.skor[ind.key]) : Math.round(skalaSikap * 0.8),
             oninput: hitungPersen
           })
         ]))),
@@ -564,7 +589,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
                     el('span', { style: 'font-size:11.5px;color:var(--abu-teks-halus);' }, tanggalId(r.dibuat_pada, true))
                   ]),
                   el('div', { style: 'font-size:12px;color:var(--abu-teks);margin-top:2px;' },
-                    INDIKATOR_SIKAP.map(i => `${i.label} ${r.skor?.[i.key] ?? '-'}`).join(' · ')),
+                    Object.entries(r.skor || {}).map(([k, v]) => `${k} ${v}`).join(' · ')),
                   r.catatan ? el('div', { class: 'komentar-sejawat' }, r.catatan) : null,
                   el('button', {
                     class: 'tombol tombol-bahaya tombol-kecil', style: 'margin-top:6px;',

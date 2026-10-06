@@ -202,6 +202,58 @@ export const INDIKATOR_SIKAP = [
   { key: 'inisiatif', label: 'Inisiatif' }
 ];
 
+export const SKALA_SIKAP_BAWAAN = 5;
+
+/** Indikator sikap yang berlaku untuk sebuah program. Program boleh
+ *  menetapkan daftarnya sendiri — mis. modul yang memakai rubrik
+ *  pengamatan kinerja dengan aspek berbeda. */
+export async function indikatorSikapProgram(tujuanPembelajaranId) {
+  if (!tujuanPembelajaranId) return { indikator: INDIKATOR_SIKAP, skala: SKALA_SIKAP_BAWAAN };
+  const { data, error } = await supabase
+    .from('tujuan_pembelajaran').select('indikator_sikap, skala_sikap')
+    .eq('id', tujuanPembelajaranId).maybeSingle();
+  if (error) throw error;
+  const daftar = Array.isArray(data?.indikator_sikap) && data.indikator_sikap.length > 0
+    ? data.indikator_sikap : INDIKATOR_SIKAP;
+  return { indikator: daftar, skala: Number(data?.skala_sikap) > 0 ? Number(data.skala_sikap) : SKALA_SIKAP_BAWAAN };
+}
+
+// ============ Papan Tanggapan Pameran Gagasan ============
+export const JENIS_TANGGAPAN = [
+  { nilai: 'pujian', label: 'Pujian', tanya: 'Apa yang sudah bagus?' },
+  { nilai: 'pertanyaan', label: 'Pertanyaan', tanya: 'Apa yang belum jelas?' },
+  { nilai: 'saran', label: 'Saran', tanya: 'Bagaimana jika ...?' }
+];
+
+export async function daftarTanggapanPameran(penugasanId) {
+  const { data, error } = await supabase
+    .from('tanggapan_pameran')
+    .select('*, penulis:penulis_id(nama, no_absen), kelompok_asal:kelompok_penulis(nama)')
+    .eq('penugasan_id', penugasanId)
+    .order('dibuat_pada', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function kirimTanggapanPameran({ penugasanId, kelompokTujuan, penulisId, kelompokPenulis, jenis, isi }) {
+  const teks = (isi || '').trim();
+  if (!teks) throw new Error('Tanggapan tidak boleh kosong.');
+  const { data, error } = await supabase.from('tanggapan_pameran').insert({
+    penugasan_id: penugasanId, kelompok_tujuan: kelompokTujuan,
+    penulis_id: penulisId, kelompok_penulis: kelompokPenulis || null,
+    jenis, isi: teks
+  }).select('*, penulis:penulis_id(nama, no_absen), kelompok_asal:kelompok_penulis(nama)').single();
+  if (error) throw error;
+  return data;
+}
+
+export async function ubahSembunyiTanggapan(id, disembunyikan, olehId) {
+  const { error } = await supabase.from('tanggapan_pameran')
+    .update({ disembunyikan, disembunyikan_oleh: disembunyikan ? olehId : null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // ============ Badge ============
 export async function daftarBadgeProgram(tujuanPembelajaranId) {
   const { data, error } = await supabase.from('badge').select('*').eq('tujuan_pembelajaran_id', tujuanPembelajaranId);

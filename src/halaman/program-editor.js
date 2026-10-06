@@ -15,6 +15,7 @@ import {
 import { daftarBadgeProgram, buatBadge, updateBadge, hapusBadge } from '../lib/data-asesmen.js';
 import { buatPembangunLembar } from '../lib/pembangun-lembar.js';
 import { JENIS_DIAGNOSTIK } from '../lib/data-kurikulum.js';
+import { INDIKATOR_SIKAP, SKALA_SIKAP_BAWAAN } from '../lib/data-asesmen.js';
 import { daftarPenugasanProgram, tutupSemuaPenugasanProgram } from '../lib/data-kelas.js';
 
 export async function renderProgramEditor(root, { profil, onKeluar, programId }) {
@@ -72,6 +73,30 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
         ]),
         el('div', { class: 'medan' }, [
           el('label', { style: 'display:flex;align-items:center;gap:8px;cursor:pointer;' }, [
+            el('input', { type: 'checkbox', id: 'e-pameran', checked: !!program.pameran_aktif }),
+            el('span', {}, 'Aktifkan Papan Tanggapan Pameran Gagasan')
+          ]),
+          el('div', { class: 'keterangan' },
+            'Murid dapat menanggapi karya kelompok LAIN dengan Pujian, Pertanyaan, atau Saran. Tidak bisa menanggapi kelompoknya sendiri.')
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Indikator Observasi Sikap'),
+          el('textarea', {
+            id: 'e-indikator-sikap', style: 'min-height:84px;font-family:monospace;font-size:12px;',
+            placeholder: 'Kosongkan untuk memakai indikator bawaan:\nDisiplin, Kerja Sama, Tanggung Jawab, Inisiatif'
+          }, (program.indikator_sikap || []).map(i => i.label).join('\n')),
+          el('div', { class: 'keterangan' },
+            'Satu indikator per baris. Dipakai saat guru mencatat observasi sikap untuk program ini. Mengubah daftar tidak menghapus catatan lama — kunci lama tetap ditampilkan.')
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Skor Maksimal Tiap Indikator Sikap'),
+          el('input', { id: 'e-skala-sikap', type: 'number', min: '2', max: '10',
+            value: program.skala_sikap || SKALA_SIKAP_BAWAAN }),
+          el('div', { class: 'keterangan' },
+            `Bawaan ${SKALA_SIKAP_BAWAAN}. Modul yang memakai rubrik 1–3 bisa mengisinya 3.`)
+        ]),
+        el('div', { class: 'medan' }, [
+          el('label', { style: 'display:flex;align-items:center;gap:8px;cursor:pointer;' }, [
             el('input', { type: 'checkbox', id: 'e-wajib-diagnostik', checked: !!program.wajib_diagnostik }),
             el('span', {}, 'Wajibkan asesmen diagnostik sebelum mengerjakan misi')
           ]),
@@ -96,7 +121,20 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                   deskripsi: document.getElementById('e-deskripsi').value.trim() || null,
                   petunjuk_umum: document.getElementById('e-petunjuk').value.trim() || null,
                   materi_awal: document.getElementById('e-materi').value.trim() || null,
-                  wajib_diagnostik: document.getElementById('e-wajib-diagnostik').checked
+                  wajib_diagnostik: document.getElementById('e-wajib-diagnostik').checked,
+                  pameran_aktif: document.getElementById('e-pameran').checked,
+                  skala_sikap: Number(document.getElementById('e-skala-sikap').value) || null,
+                  // Label bebas diubah guru; kuncinya dibuat otomatis dari
+                  // labelnya agar guru tidak perlu memikirkan nama teknis.
+                  indikator_sikap: (() => {
+                    const baris = document.getElementById('e-indikator-sikap').value
+                      .split('\n').map(x => x.trim()).filter(Boolean);
+                    if (baris.length === 0) return null;
+                    return baris.map((label, i) => ({
+                      key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `i${i + 1}`,
+                      label
+                    }));
+                  })()
                 });
                 tutup(); roti('Program diperbarui.', 'sukses'); render();
               } catch (err) { roti(pesanGalat(err), 'galat'); }

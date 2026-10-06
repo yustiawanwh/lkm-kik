@@ -6,7 +6,7 @@ import { el, isi, tanggalId } from '../lib/dom.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
-import { rangkumanSejawatGuru, daftarRefleksiPenugasan, daftarSikapKelas, promptRefleksiProgram, INDIKATOR_SIKAP, hasilDiagnostik } from '../lib/data-asesmen.js';
+import { rangkumanSejawatGuru, daftarRefleksiPenugasan, daftarSikapKelas, promptRefleksiProgram, INDIKATOR_SIKAP, hasilDiagnostik, daftarTanggapanPameran, ubahSembunyiTanggapan, JENIS_TANGGAPAN } from '../lib/data-asesmen.js';
 import { buatWidgetLembar } from '../lib/lembar-widget.js';
 
 export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId }) {
@@ -14,6 +14,7 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
   let penugasan = null, sejawat = [], refleksi = [], sikap = [], promptRefleksi = [];
   let diagnostik = { lembar: [], isian: [] };
   let galatDiagnostik = '';
+  let tanggapan = [];
 
   async function muatSemua() {
     memuat = true; render();
@@ -27,6 +28,7 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
       // belum dijalankan hanya membuat tab hilang tanpa penjelasan apa pun.
       try {
         diagnostik = await hasilDiagnostik(penugasanId, penugasan.tujuan_pembelajaran_id);
+        tanggapan = await daftarTanggapanPameran(penugasanId).catch(() => []);
         galatDiagnostik = '';
       } catch (err) {
         diagnostik = { lembar: [], isian: [] };
@@ -154,6 +156,46 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
     }));
   }
 
+  /** Papan tanggapan antar kelompok, dengan moderasi guru. */
+  function gambarPameran() {
+    if (tanggapan.length === 0) {
+      return el('div', { class: 'kartu-kosong' },
+        'Belum ada tanggapan. Pastikan Papan Tanggapan sudah diaktifkan di Penyunting Program → Edit Detail.');
+    }
+    const perKelompok = new Map();
+    for (const t of tanggapan) {
+      const k = t.kelompok_tujuan;
+      if (!perKelompok.has(k)) perKelompok.set(k, []);
+      perKelompok.get(k).push(t);
+    }
+    return el('div', {}, [...perKelompok.entries()].map(([kid, isi]) => el('div', { style: 'margin-bottom:18px;' }, [
+      el('div', { class: 'judul-grup' }, [
+        el('span', {}, `Tanggapan untuk kelompok ${isi[0]?.kelompok_asal?.nama ? '' : ''}${kid.slice(0, 8)}`),
+        el('span', { class: 'lencana' }, `${isi.filter(t => !t.disembunyikan).length} tampil`)
+      ]),
+      el('div', { class: 'daftar-baris' }, isi.map(t => el('div', { class: 'baris-item' + (t.disembunyikan ? ' baris-redup' : '') }, [
+        el('span', { class: 'lencana' }, JENIS_TANGGAPAN.find(j => j.nilai === t.jenis)?.label || t.jenis),
+        el('div', { class: 'isi-utama' }, [
+          el('div', { style: 'font-size:13.5px;' }, t.isi),
+          el('div', { class: 'meta-baris' },
+            `${t.penulis?.nama || 'Murid'}${t.kelompok_asal?.nama ? ` · ${t.kelompok_asal.nama}` : ''} · ${tanggalId(t.dibuat_pada, true)}` +
+            (t.disembunyikan ? ' · disembunyikan' : ''))
+        ]),
+        el('button', {
+          class: 'tombol tombol-hantu tombol-kecil',
+          onclick: async () => {
+            try {
+              await ubahSembunyiTanggapan(t.id, !t.disembunyikan, profil.id);
+              t.disembunyikan = !t.disembunyikan;
+              roti(t.disembunyikan ? 'Tanggapan disembunyikan.' : 'Tanggapan ditampilkan.', 'sukses');
+              render();
+            } catch (err) { roti(pesanGalat(err), 'galat'); }
+          }
+        }, t.disembunyikan ? 'Tampilkan' : 'Sembunyikan')
+      ])))
+    ])));
+  }
+
   function gambarTabTombol(kunci, label) {
     const aktif = tab === kunci;
     return el('button', {
@@ -171,11 +213,13 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
             el('div', { class: 'deret-tab' }, [
               gambarTabTombol('diagnostik',
                 diagnostik.lembar.length > 0 ? `Diagnostik (${diagnostik.lembar.length})` : 'Diagnostik'),
+              gambarTabTombol('pameran', `Pameran (${tanggapan.length})`),
               gambarTabTombol('sejawat', 'Nilai Sejawat'),
               gambarTabTombol('refleksi', `Refleksi (${refleksi.length})`),
               gambarTabTombol('sikap', `Observasi Sikap (${sikap.length})`)
             ]),
             tab === 'diagnostik' ? gambarDiagnostik() :
+            tab === 'pameran' ? gambarPameran() :
             tab === 'sejawat' ? gambarSejawat() : tab === 'refleksi' ? gambarRefleksi() : gambarSikap()
           ]);
 

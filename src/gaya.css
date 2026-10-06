@@ -412,6 +412,24 @@ input[type="file"] {
 }
 @keyframes kilau { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ============ Papan Tanggapan Pameran Gagasan ============ */
+.papan-tanggapan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kolom-tanggapan {
+  padding: 10px 12px; border-radius: var(--radius);
+  border: 1px solid var(--garis); min-height: 90px;
+}
+.tanggapan-pujian { background: var(--hijau-lembut); color: var(--hijau-teks); }
+.tanggapan-pertanyaan { background: var(--kuning-lembut); color: var(--kuning-teks); }
+.tanggapan-saran { background: var(--biru-kabut); color: var(--biru-tua); }
+.catatan-tempel {
+  background: var(--permukaan); color: var(--navy);
+  border-radius: var(--radius-sm); padding: 7px 9px; margin-bottom: 7px;
+  font-size: 13px; word-break: break-word; box-shadow: var(--bayang-1);
+}
+@media (max-width: 720px) {
+  .papan-tanggapan { grid-template-columns: 1fr; }
+}
+
 /* ============ Panel asesmen diagnostik ============ */
 .panel-diagnostik { border-color: var(--biru-lembut); background: var(--biru-kabut); }
 .diagnostik-terkunci { border-color: var(--kuning); background: var(--kuning-lembut); }
