@@ -843,16 +843,19 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   /** Panel asesmen diagnostik, tampil di atas daftar misi. */
   /** Kartu Awal kelompok — rujukan hasil kerja pada TP sebelumnya. */
   function gambarKartuAwal() {
-    if (!kartuAwal || !(kartuAwal.isi || []).length) return null;
+    // Baris tanpa isi tidak ditampilkan. Menampilkannya sebagai "—" hanya
+    // membuat murid mengira ada bagian yang hilang.
+    const isiTerisi = (kartuAwal?.isi || []).filter(b => (b.teks || '').trim());
+    if (!kartuAwal || isiTerisi.length === 0) return null;
     return el('details', { class: 'kartu panel-kartu-awal', style: 'margin-bottom:16px;' }, [
       el('summary', {}, [
         el('span', { style: 'font-weight:650;' }, kartuAwal.judul || 'Kartu Awal Kelompokku'),
-        el('span', { class: 'lencana', style: 'margin-left:8px;' }, `${kartuAwal.isi.length} bagian`)
+        el('span', { class: 'lencana', style: 'margin-left:8px;' }, `${isiTerisi.length} bagian`)
       ]),
       el('div', { style: 'margin-top:10px;display:flex;flex-direction:column;gap:10px;' },
-        kartuAwal.isi.map(b => el('div', { class: 'baris-kartu-awal' }, [
+        isiTerisi.map(b => el('div', { class: 'baris-kartu-awal' }, [
           el('div', { style: 'font-size:12px;font-weight:650;color:var(--abu-teks);margin-bottom:3px;' }, b.label || ''),
-          el('div', { style: 'font-size:13.5px;white-space:pre-wrap;' }, b.teks || '—')
+          el('div', { style: 'font-size:13.5px;white-space:pre-wrap;' }, b.teks)
         ])))
     ]);
   }

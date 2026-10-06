@@ -412,6 +412,12 @@ input[type="file"] {
 }
 @keyframes kilau { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ============ Bahan jawaban pada penyusun Kartu Awal ============ */
+.bahan-jawaban {
+  background: var(--permukaan); border: 1px solid var(--garis-halus);
+  border-radius: var(--radius-sm); padding: 7px 9px;
+}
+
 /* ============ Kartu penugasan di halaman kelas ============ */
 .kartu-penugasan {
   background: var(--permukaan); border: 1px solid var(--garis);

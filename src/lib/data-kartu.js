@@ -83,10 +83,69 @@ export async function tarikBahanKartu(penugasanSumber, kelompokId) {
 
   const { data: isian } = await supabase
     .from('isian_lembar')
-    .select('data, lembar:lembar_kerja_id(kode, judul)')
+    .select('data, lembar:lembar_kerja_id(kode, judul, tipe, struktur)')
     .eq('penugasan_id', penugasanSumber)
     .eq('kelompok_id', kelompokId);
   hasil.lembar = (isian || []).map(i => ({ lembar: i.lembar, data: i.data }));
+
+  return hasil;
+}
+
+/**
+ * Ubah isian lembar menjadi daftar {label, teks} yang terbaca manusia.
+ *
+ * Tanpa ini, bahan yang ditarik tampil sebagai JSON mentah berisi kunci
+ * seperti "m1" atau "k0" — guru tidak bisa tahu jawaban itu untuk
+ * pertanyaan yang mana, sehingga bahannya tidak berguna.
+ */
+export function bacaIsianTerbaca(lembar, data) {
+  const st = lembar?.struktur || {};
+  const hasil = [];
+  const bersih = (v) => (v === null || v === undefined || String(v).trim() === '') ? null : String(v).trim();
+
+  // Formulir: kunci isian dipetakan ke labelnya.
+  if (Array.isArray(st.medan) && st.medan.length) {
+    for (const m of st.medan) {
+      const v = bersih(data?.[m.key]);
+      if (v) hasil.push({ label: m.label || m.key, teks: v });
+    }
+  }
+
+  // Matriks / kalkulator: tiap baris dirangkai "Kolom: isi".
+  if (Array.isArray(data?.baris) || (data?.baris && typeof data.baris === 'object')) {
+    const kolom = st.kolom || [];
+    const baris = Array.isArray(data.baris) ? data.baris : Object.values(data.baris);
+    baris.forEach((row, i) => {
+      const bagian = [];
+      Object.keys(row || {}).forEach((k) => {
+        const ki = Number(String(k).replace(/^k/, ''));
+        const namaKolom = Number.isFinite(ki) ? (kolom[ki] || k) : k;
+        const v = bersih(row[k]);
+        if (v) bagian.push(`${namaKolom}: ${v}`);
+      });
+      if (bagian.length) hasil.push({ label: `Baris ${i + 1}`, teks: bagian.join(' · ') });
+    });
+  }
+
+  // Likert: nomor butir dipetakan ke bunyi pernyataannya.
+  if (data?.butir && typeof data.butir === 'object') {
+    const butir = st.butir || [];
+    for (const [no, nilai] of Object.entries(data.butir)) {
+      const v = bersih(nilai);
+      if (v) hasil.push({ label: butir[Number(no) - 1] || `Butir ${no}`, teks: v });
+    }
+  }
+
+  // Sisa kunci yang belum tertangani (kanvas, tahapan, instrumen).
+  const sudah = new Set([
+    ...(st.medan || []).map(m => m.key), 'baris', 'butir'
+  ]);
+  for (const [k, v] of Object.entries(data || {})) {
+    if (sudah.has(k)) continue;
+    if (typeof v === 'object') continue;
+    const t = bersih(v);
+    if (t) hasil.push({ label: k, teks: t });
+  }
 
   return hasil;
 }

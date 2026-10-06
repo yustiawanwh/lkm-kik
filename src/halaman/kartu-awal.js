@@ -7,7 +7,7 @@ import { ambilPenugasan } from '../lib/data-papan.js';
 import { daftarKelompok } from '../lib/data-kelas.js';
 import {
   daftarKartuAwal, simpanKartuAwal, hapusKartuAwal, penugasanSekelas,
-  tarikBahanKartu, ringkasTanggapan, LABEL_BAWAAN
+  tarikBahanKartu, ringkasTanggapan, bacaIsianTerbaca, LABEL_BAWAAN
 } from '../lib/data-kartu.js';
 
 export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
@@ -90,11 +90,32 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
               : 'Tidak ada tanggapan pameran pada penugasan sumber. Jawaban lembar di bawah bisa Anda salin.'),
           ...(bahan.lembar.length === 0
             ? [el('div', { class: 'kartu-kosong' }, 'Kelompok ini tidak punya isian lembar pada penugasan sumber.')]
-            : bahan.lembar.map(l => el('details', { class: 'rujukan-sejawat' }, [
-                el('summary', {}, `${l.lembar?.kode || ''} — ${l.lembar?.judul || 'Lembar'}`),
-                el('div', { class: 'kotak-teks-banding', style: 'margin-top:8px;' },
-                  JSON.stringify(l.data, null, 2))
-              ])))
+            : bahan.lembar.map(l => {
+                const isiTerbaca = bacaIsianTerbaca(l.lembar, l.data);
+                return el('details', { class: 'rujukan-sejawat' }, [
+                  el('summary', {}, `${l.lembar?.kode || ''} — ${l.lembar?.judul || 'Lembar'} (${isiTerbaca.length} jawaban)`),
+                  isiTerbaca.length === 0
+                    ? el('div', { style: 'font-size:13px;color:var(--abu-teks);margin-top:8px;' }, 'Kelompok ini belum mengisi lembar tersebut.')
+                    : el('div', { style: 'margin-top:8px;display:flex;flex-direction:column;gap:7px;' },
+                        isiTerbaca.map(x => el('div', { class: 'bahan-jawaban' }, [
+                          el('div', { style: 'display:flex;justify-content:space-between;gap:8px;align-items:baseline;' }, [
+                            el('div', { style: 'font-size:11.5px;font-weight:650;color:var(--abu-teks);' }, x.label),
+                            el('button', {
+                              class: 'tombol tombol-hantu tombol-kecil',
+                              title: 'Tempel jawaban ini ke baris kartu yang sedang kosong',
+                              onclick: () => {
+                                const kosong = baris.find(b => !(b.teks || '').trim());
+                                if (!kosong) { roti('Semua baris kartu sudah terisi. Tambah baris dulu bila perlu.', 'galat'); return; }
+                                kosong.teks = x.teks;
+                                gambarBaris();
+                                roti(`Ditempel ke baris "${kosong.label || 'tanpa nama'}".`, 'sukses');
+                              }
+                            }, 'Tempel')
+                          ]),
+                          el('div', { style: 'font-size:13px;white-space:pre-wrap;margin-top:2px;' }, x.teks)
+                        ])))
+                ]);
+              }))
         ]);
       } catch (err) {
         isi(areaBahan, [el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah-teks);border-color:transparent;' }, pesanGalat(err))]);
@@ -147,8 +168,14 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
           el('button', {
             class: 'tombol tombol-primer',
             onclick: async () => {
-              const terisi = baris.filter(b => (b.label || '').trim() || (b.teks || '').trim());
-              if (terisi.length === 0) { roti('Kartu masih kosong.', 'galat'); return; }
+              // Label sudah terisi otomatis, jadi memeriksa label saja akan
+              // meloloskan kartu kosong — dan murid melihat deretan "—"
+              // yang lebih membingungkan daripada tidak ada kartu.
+              const terisi = baris.filter(b => (b.teks || '').trim());
+              if (terisi.length === 0) {
+                roti('Kartu belum berisi apa pun. Isi minimal satu baris sebelum menyimpan.', 'galat');
+                return;
+              }
               try {
                 await simpanKartuAwal({
                   id: kartu?.id, penugasanId, kelompokId: kelompok.id,
