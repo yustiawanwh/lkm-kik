@@ -412,6 +412,32 @@ input[type="file"] {
 }
 @keyframes kilau { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ============ Kartu penugasan di halaman kelas ============ */
+.kartu-penugasan {
+  background: var(--permukaan); border: 1px solid var(--garis);
+  border-radius: var(--radius); padding: var(--sp-3) var(--sp-4);
+  transition: border-color var(--transisi);
+}
+.kartu-penugasan:hover { border-color: var(--abu-teks-halus); }
+.penugasan-kepala {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3); flex-wrap: wrap;
+}
+.penugasan-aksi {
+  display: flex; gap: var(--sp-4); flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--garis-halus);
+}
+.gugus-aksi { display: flex; flex-direction: column; gap: 5px; }
+.label-gugus {
+  font-size: 11px; font-weight: 600; color: var(--abu-teks-halus);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.tombol-gugus { display: flex; gap: 4px; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .penugasan-aksi { flex-direction: column; gap: 12px; }
+}
+
 /* ============ Kartu Awal Kelompok ============ */
 .panel-kartu-awal { border-color: var(--biru-lembut); background: var(--biru-kabut); }
 .panel-kartu-awal summary { cursor: pointer; list-style: none; }

@@ -865,29 +865,47 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
       ]),
       penugasanList.length === 0
         ? el('div', { class: 'kartu-kosong' }, 'Belum ada program yang ditugaskan ke kelas ini.')
-        : el('div', { class: 'daftar-baris' }, penugasanList.map(p => el('div', { class: 'baris-item' }, [
-            el('div', { class: 'isi-utama' }, [
-              el('div', { class: 'judul-baris' }, p.tujuan_pembelajaran?.judul || '(program dihapus)'),
-              el('div', { class: 'meta-baris' }, `Tenggat: ${tanggalId(p.tenggat, true)}`)
+        : el('div', { class: 'daftar-baris' }, penugasanList.map(p => el('div', { class: 'kartu-penugasan' }, [
+            // Kepala: judul program dan statusnya.
+            el('div', { class: 'penugasan-kepala' }, [
+              el('div', { class: 'isi-utama' }, [
+                el('div', { class: 'judul-baris' }, p.tujuan_pembelajaran?.judul || '(program dihapus)'),
+                el('div', { class: 'meta-baris' }, `Tenggat: ${tanggalId(p.tenggat, true)}`)
+              ]),
+              el('span', {
+                class: p.dibuka ? 'lencana' : 'lencana lencana-susulan',
+                style: p.dibuka ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : '',
+                title: p.dibuka
+                  ? 'Murid bisa mengerjakan. Status ini terpisah dari status Terbit/Draf program.'
+                  : 'Murid tidak bisa mengerjakan lagi.'
+              }, p.dibuka ? 'Terbuka' : 'Ditutup')
             ]),
-            el('span', {
-              class: p.dibuka ? 'lencana' : 'lencana lencana-susulan',
-              style: p.dibuka ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : '',
-              title: p.dibuka
-                ? 'Murid bisa mengerjakan. Status ini terpisah dari status Terbit/Draf program.'
-                : 'Murid tidak bisa mengerjakan lagi.'
-            }, p.dibuka ? 'Terbuka' : 'Ditutup'),
-            el('div', { class: 'aksi-baris' }, [
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/kartu/${p.id}`) }, ikonTeks('catatan', 'Kartu Awal')),
-              el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => navigasi(`#/guru/pantau/${p.id}`) }, ikonTeks('papan', 'Pantau')),
-              el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/nilai/${p.id}`) }, ikonTeks('nilai', 'Nilai')),
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/asesmen/${p.id}`) }, ikonTeks('asesmen', 'Asesmen')),
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/kemiripan/${p.id}`) }, ikonTeks('cari', 'Kemiripan')),
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSusulan(p) }, ikonTeks('kalender', 'Susulan')),
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPenugasan(p) }, 'Ubah Tenggat'),
-              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => ubahBukaTutup(p) }, p.dibuka ? 'Tutup' : 'Buka'),
-              el('button', { class: 'tombol tombol-bahaya tombol-kecil', onclick: () => hapusPenugasanDenganKonfirmasi(p) }, 'Hapus')
+            // Tombol SELALU terlihat dan dikelompokkan. Sebelumnya kesembilan
+            // tombol berdesakan dalam satu baris yang baru muncul saat
+            // kursor diarahkan — tombol yang baru ditambahkan praktis
+            // mustahil ditemukan.
+            el('div', { class: 'penugasan-aksi' }, [
+              el('div', { class: 'gugus-aksi' }, [
+                el('span', { class: 'label-gugus' }, 'Pantau & Nilai'),
+                el('div', { class: 'tombol-gugus' }, [
+                  el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => navigasi(`#/guru/pantau/${p.id}`) }, ikonTeks('papan', 'Pantau')),
+                  el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/nilai/${p.id}`) }, ikonTeks('nilai', 'Nilai')),
+                  el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/asesmen/${p.id}`) }, ikonTeks('asesmen', 'Asesmen')),
+                  el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/kemiripan/${p.id}`) }, ikonTeks('cari', 'Kemiripan'))
+                ])
+              ]),
+              el('div', { class: 'gugus-aksi' }, [
+                el('span', { class: 'label-gugus' }, 'Bahan & Waktu'),
+                el('div', { class: 'tombol-gugus' }, [
+                  el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/kartu/${p.id}`) }, ikonTeks('catatan', 'Kartu Awal')),
+                  el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSusulan(p) }, ikonTeks('kalender', 'Susulan')),
+                  el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPenugasan(p) }, 'Ubah Tenggat'),
+                  el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => ubahBukaTutup(p) }, p.dibuka ? 'Tutup' : 'Buka'),
+                  el('button', { class: 'tombol tombol-bahaya tombol-kecil', onclick: () => hapusPenugasanDenganKonfirmasi(p) }, 'Hapus')
+                ])
+              ])
             ])
+
           ])))
     ]);
   }
