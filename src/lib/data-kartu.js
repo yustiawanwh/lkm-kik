@@ -150,6 +150,47 @@ export function bacaIsianTerbaca(lembar, data) {
   return hasil;
 }
 
+/**
+ * Susun isi kartu secara OTOMATIS dari bahan satu kelompok.
+ *
+ * Seluruh jawaban kelompok pada penugasan sumber dimasukkan apa adanya,
+ * dikelompokkan per lembar dan diberi label pertanyaannya. Guru tidak perlu
+ * menyalin apa pun; cukup merapikan bila ingin.
+ *
+ * Bagian yang kosong TETAP ditulis sebagai "belum diisi". Itu bukan
+ * kegagalan: kartu yang menunjukkan apa yang belum sempat dikerjakan justru
+ * memberi tahu kelompok apa yang harus mereka putuskan sekarang.
+ */
+export function susunIsiOtomatis(bahan) {
+  const isi = [];
+
+  for (const l of bahan.lembar || []) {
+    const jawaban = bacaIsianTerbaca(l.lembar, l.data);
+    const judul = `${l.lembar?.kode ? l.lembar.kode + ' — ' : ''}${l.lembar?.judul || 'Lembar'}`;
+    isi.push({
+      label: judul,
+      teks: jawaban.length
+        ? jawaban.map(j => `${j.label}: ${j.teks}`).join('\n')
+        : '(belum diisi kelompokmu pada pertemuan sebelumnya)'
+    });
+  }
+
+  const ringkas = ringkasTanggapan(bahan.tanggapan || []);
+  isi.push({
+    label: 'Tanggapan kelompok lain',
+    teks: ringkas || '(belum ada tanggapan dari kelompok lain)'
+  });
+
+  if (isi.length === 1 && !ringkas) {
+    return [{
+      label: 'Catatan',
+      teks: 'Kelompokmu belum sempat mengisi apa pun pada pertemuan sebelumnya. ' +
+            'Mulailah dari menyepakati masalah dan gagasan kelompok hari ini.'
+    }];
+  }
+  return isi;
+}
+
 /** Susun tanggapan menjadi satu paragraf siap tempel. */
 export function ringkasTanggapan(tanggapan) {
   if (!tanggapan.length) return '';

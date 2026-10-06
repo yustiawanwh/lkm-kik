@@ -7,7 +7,7 @@ import { ambilPenugasan } from '../lib/data-papan.js';
 import { daftarKelompok } from '../lib/data-kelas.js';
 import {
   daftarKartuAwal, simpanKartuAwal, hapusKartuAwal, penugasanSekelas,
-  tarikBahanKartu, ringkasTanggapan, bacaIsianTerbaca, LABEL_BAWAAN
+  tarikBahanKartu, ringkasTanggapan, bacaIsianTerbaca, susunIsiOtomatis, LABEL_BAWAAN
 } from '../lib/data-kartu.js';
 
 export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
@@ -28,6 +28,67 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
       sumberTerpilih = kartuList.find(k => k.penugasan_sumber)?.penugasan_sumber || '';
     } catch (err) { galat = pesanGalat(err); }
     finally { memuat = false; render(); }
+  }
+
+  /** Buat kartu untuk SELURUH kelompok sekaligus, terisi otomatis dari
+   *  penugasan sumber. Inilah jalur utamanya — menyalin manual untuk tujuh
+   *  kelompok terlalu memberatkan dan mudah terlewat. */
+  function bukaDialogMassal() {
+    let sumber = sumberTerpilih;
+    let timpa = false;
+    const { tutup } = dialog({
+      judul: 'Buat Kartu untuk Semua Kelompok',
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+          'Kartu tiap kelompok diisi otomatis dari jawaban mereka sendiri pada penugasan sumber, ' +
+          'ditambah tanggapan kelompok lain. Bagian yang belum sempat mereka isi tetap ditulis apa adanya ' +
+          'sebagai "belum diisi" — justru itu yang memberi tahu kelompok apa yang harus mereka putuskan hari ini.'),
+        el('div', { class: 'medan' }, [
+          el('label', {}, 'Penugasan Sumber'),
+          el('select', { onchange: (e) => { sumber = e.target.value; } }, [
+            el('option', { value: '' }, '— pilih penugasan sumber —'),
+            ...sumberList.map(p => el('option', {
+              value: p.id, selected: p.id === sumber
+            }, `${p.tujuan_pembelajaran?.kode ? p.tujuan_pembelajaran.kode + ' — ' : ''}${p.tujuan_pembelajaran?.judul || 'Program'}`))
+          ])
+        ]),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px;' }, [
+          el('input', { type: 'checkbox', onchange: (e) => { timpa = e.target.checked; } }),
+          el('span', { style: 'font-size:13.5px;' }, 'Timpa kartu yang sudah ada (suntingan Anda akan hilang)')
+        ]),
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+          el('button', {
+            class: 'tombol tombol-primer',
+            onclick: async (e) => {
+              if (!sumber) { roti('Pilih penugasan sumber lebih dulu.', 'galat'); return; }
+              const tombol = e.currentTarget;
+              tombol.disabled = true;
+              const lonceng = roti('Menyusun kartu…', 'info', 0);
+              let dibuat = 0, dilewati = 0, gagal = 0;
+              for (const k of kelompokList) {
+                if (kartuUntuk(k.id) && !timpa) { dilewati++; continue; }
+                try {
+                  const bahan = await tarikBahanKartu(sumber, k.id);
+                  await simpanKartuAwal({
+                    id: kartuUntuk(k.id)?.id, penugasanId, kelompokId: k.id,
+                    judul: k.nama, isi: susunIsiOtomatis(bahan), penugasanSumber: sumber
+                  });
+                  dibuat++;
+                } catch { gagal++; }
+                if (lonceng) lonceng.textContent = `Menyusun kartu… ${dibuat + dilewati + gagal} dari ${kelompokList.length}`;
+              }
+              lonceng?.remove();
+              tutup();
+              roti(`${dibuat} kartu dibuat` +
+                   (dilewati ? `, ${dilewati} dilewati karena sudah ada` : '') +
+                   (gagal ? `, ${gagal} gagal` : '') + '.', gagal ? 'info' : 'sukses');
+              await muat();
+            }
+          }, 'Buat Sekarang')
+        ])
+      ])
+    });
   }
 
   function kartuUntuk(kelompokId) {
@@ -220,8 +281,12 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
         : el('div', {}, [
             el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
               'Tiap kelompok hanya melihat kartunya sendiri di Papan Misi. ' +
-              'Tanggapan pameran dari penugasan sumber dapat ditarik otomatis; ' +
-              'jawaban lembar kerja ditampilkan sebagai bahan untuk Anda ringkas sendiri.'),
+              'Cara tercepat: tekan "Buat untuk Semua Kelompok" — kartu diisi otomatis dari jawaban ' +
+              'tiap kelompok pada penugasan sebelumnya. Suntingan per kelompok hanya bila perlu.'),
+            el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:12px;' }, [
+              el('button', { class: 'tombol tombol-primer', onclick: bukaDialogMassal },
+                'Buat untuk Semua Kelompok')
+            ]),
             kelompokList.length === 0
               ? el('div', { class: 'kartu-kosong' }, 'Belum ada kelompok di kelas ini.')
               : el('div', { class: 'daftar-baris' }, kelompokList.map(k => {
