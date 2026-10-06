@@ -63,6 +63,29 @@ export async function kembalikanTugas(progresId, catatan, keBacklog = false, dur
   return data;
 }
 
+/** Seluruh isian PERORANGAN pada satu penugasan, untuk pembandingan teks.
+ *  Lembar kelompok sengaja dikecualikan — isinya memang dikerjakan bersama,
+ *  sehingga kemiripannya bukan tanda penyalinan. */
+export async function isianPeroranganPenugasan(penugasanId, tujuanPembelajaranId) {
+  const { data: lembar, error: e1 } = await supabase
+    .from('lembar_kerja').select('id, kode, judul, milik_kelompok')
+    .eq('tujuan_pembelajaran_id', tujuanPembelajaranId)
+    .eq('milik_kelompok', false)
+    .order('urutan');
+  if (e1) throw e1;
+  if (!lembar.length) return { lembar: [], isian: [] };
+
+  const { data: isian, error: e2 } = await supabase
+    .from('isian_lembar')
+    .select('id, lembar_kerja_id, murid_id, data, profil:murid_id(nama, no_absen)')
+    .eq('penugasan_id', penugasanId)
+    .in('lembar_kerja_id', lembar.map(l => l.id))
+    .not('murid_id', 'is', null);
+  if (e2) throw e2;
+
+  return { lembar, isian };
+}
+
 /** Ambil rubrik program (kalau guru mendefinisikannya). */
 export async function ambilRubrikProgram(tujuanPembelajaranId) {
   const { data, error } = await supabase

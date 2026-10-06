@@ -35,6 +35,7 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
     const ambang = pengaturan.ambang || { kkm: 75, hijau: 85 };
     const susulan = pengaturan.susulan || { penalti: 10 };
     const kecepatan = pengaturan.kecepatan || { durasi_target_jam: 24 };
+    const kemiripanTeks = pengaturan.kemiripan_teks || { aktif: false, ambang: 80, min_kata: 8 };
     const afektifSaran = pengaturan.afektif_saran || { aktif: true, min: 75, maks: 95 };
     const penyimpanan = pengaturan.penyimpanan || { mode: 'supabase', url: '', kirim_token: true };
     const lampiranObrolan = pengaturan.lampiran_obrolan || { aktif: true, maks_mb: 5 };
@@ -120,6 +121,28 @@ export async function renderKelola(root, { profil, onKeluar, tab = 'pengaturan' 
           medanAngka('Afektif (%)', ranah.bobot?.afektif ?? 25,
             v => simpan('ranah', { ...ranah, bobot: { ...ranah.bobot, afektif: v } }))
         ])
+      ]),
+      el('div', { class: 'kartu' }, [
+        el('h3', {}, 'Deteksi Kemiripan Jawaban Teks'),
+        el('p', { style: 'color:var(--abu-teks);font-size:13px;margin:6px 0 12px;' },
+          'Membandingkan jawaban antar murid pada lembar PERORANGAN. Cocok untuk tugas mandiri yang mensyaratkan jawaban ditulis dengan kalimat sendiri. Lembar kelompok tidak dibandingkan karena memang dikerjakan bersama.'),
+        el('label', { style: 'display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:12px;' }, [
+          el('input', {
+            type: 'checkbox', checked: kemiripanTeks.aktif === true,
+            onchange: (e) => simpan('kemiripan_teks', { ...kemiripanTeks, aktif: e.target.checked })
+          }),
+          'Aktifkan deteksi kemiripan teks'
+        ]),
+        el('div', { class: 'baris-medan' }, [
+          medanAngka('Ambang Kemiripan (%)', kemiripanTeks.ambang ?? 80,
+            v => simpan('kemiripan_teks', { ...kemiripanTeks, ambang: v })),
+          medanAngka('Minimal Jumlah Kata', kemiripanTeks.min_kata ?? 8,
+            v => simpan('kemiripan_teks', { ...kemiripanTeks, min_kata: v }))
+        ]),
+        el('div', { class: 'keterangan' },
+          'Ambang 80 menangkap salinan yang nyaris utuh; 60 juga menangkap salinan dengan satu kata diubah. ' +
+          'Jawaban lebih pendek dari batas kata diabaikan — jawaban sependek "Manfaat" pasti sama antar murid tanpa ada penyalinan. ' +
+          'Hasilnya alat bantu, bukan bukti: bacalah jawabannya sendiri sebelum menyimpulkan.')
       ]),
       el('div', { class: 'kartu' }, [
         el('h3', {}, 'Saran Nilai Afektif dari Penilaian Rekan'),

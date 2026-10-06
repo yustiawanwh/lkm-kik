@@ -412,6 +412,16 @@ input[type="file"] {
 }
 @keyframes kilau { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ============ Pembandingan jawaban teks ============ */
+.banding-teks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.kotak-teks-banding {
+  background: var(--permukaan-2); border: 1px solid var(--garis);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+  word-break: break-word; max-height: 50vh; overflow-y: auto;
+}
+@media (max-width: 720px) { .banding-teks { grid-template-columns: 1fr; } }
+
 /* ============ Papan Tanggapan Pameran Gagasan ============ */
 .papan-tanggapan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .kolom-tanggapan {
