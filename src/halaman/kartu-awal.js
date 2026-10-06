@@ -43,6 +43,17 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
 
     const areaBaris = el('div', {});
     const areaBahan = el('div', {});
+    const penanda = el('div', { class: 'keterangan', style: 'text-align:right;' });
+
+    /** Tunjukkan berapa baris yang sudah berisi, supaya guru tahu
+     *  keadaannya sebelum menekan Simpan — bukan setelahnya. */
+    function perbaruiPenanda() {
+      const n = baris.filter(b => (b.teks || '').trim()).length;
+      penanda.textContent = n === 0
+        ? 'Belum ada baris yang berisi — kartu belum bisa disimpan'
+        : `${n} dari ${baris.length} baris sudah berisi`;
+      penanda.style.color = n === 0 ? 'var(--kuning-teks)' : 'var(--abu-teks)';
+    }
 
     function gambarBaris() {
       isi(areaBaris, baris.map((b, i) => el('div', { class: 'kartu', style: 'padding:10px 12px;margin-bottom:8px;background:var(--permukaan-2);' }, [
@@ -54,16 +65,17 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
           }),
           el('button', {
             class: 'tombol tombol-hantu tombol-kecil',
-            onclick: () => { baris.splice(i, 1); gambarBaris(); }
+            onclick: () => { baris.splice(i, 1); gambarBaris(); perbaruiPenanda(); }
           }, ikon('tutup', 14))
         ]),
         el('textarea', {
           style: 'min-height:70px;', value: b.teks,
-          oninput: (e) => { b.teks = e.target.value; }
+          oninput: (e) => { b.teks = e.target.value; perbaruiPenanda(); }
         }, b.teks)
       ])));
     }
     gambarBaris();
+    perbaruiPenanda();
 
     /** Tarik bahan dari penugasan sumber. Tanggapan pameran langsung
      *  dimasukkan ke barisnya; jawaban lembar ditampilkan sebagai bahan
@@ -80,7 +92,7 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
           const barisTanggapan = baris.find(b => /tanggapan/i.test(b.label));
           if (barisTanggapan) barisTanggapan.teks = ringkas;
           else baris.push({ label: 'Tanggapan kelompok lain', teks: ringkas });
-          gambarBaris();
+          gambarBaris(); perbaruiPenanda();
         }
 
         isi(areaBahan, [
@@ -107,7 +119,7 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
                                 const kosong = baris.find(b => !(b.teks || '').trim());
                                 if (!kosong) { roti('Semua baris kartu sudah terisi. Tambah baris dulu bila perlu.', 'galat'); return; }
                                 kosong.teks = x.teks;
-                                gambarBaris();
+                                gambarBaris(); perbaruiPenanda();
                                 roti(`Ditempel ke baris "${kosong.label || 'tanpa nama'}".`, 'sukses');
                               }
                             }, 'Tempel')
@@ -125,6 +137,14 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
     const { tutup } = dialog({
       judul: `Kartu Awal — ${kelompok.nama}`,
       isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' }, [
+          el('div', { style: 'font-weight:650;margin-bottom:4px;' }, 'Kartu ini dibaca kelompok tersebut sebagai bahan rujukan'),
+          el('div', { style: 'font-size:13px;' },
+            'Keenam baris di bawah baru berisi NAMA barisnya; kotak teksnya masih kosong dan perlu Anda isi. ' +
+            'Cara tercepat: pilih penugasan sumber lalu klik Tarik Bahan, kemudian tekan Tempel pada jawaban yang ingin dipakai.'),
+          el('div', { style: 'font-size:12.5px;margin-top:6px;opacity:.85;' },
+            'Kartu tidak wajib dibuat. Kelompok tanpa kartu tidak melihat panel apa pun di Papan Misi.')
+        ]),
         el('div', { class: 'medan' }, [
           el('label', {}, 'Judul Kartu'),
           el('input', { id: 'ka-judul', value: kartu?.judul || `${kelompok.nama}`, placeholder: 'mis. Kelompok 1 — Jadwal Lab' })
@@ -151,10 +171,11 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
         areaBaris,
         el('button', {
           class: 'tombol tombol-hantu tombol-kecil',
-          onclick: () => { baris.push({ label: '', teks: '' }); gambarBaris(); }
+          onclick: () => { baris.push({ label: '', teks: '' }); gambarBaris(); perbaruiPenanda(); }
         }, '+ Tambah Baris'),
 
-        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:16px;' }, [
+        penanda,
+        el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:10px;' }, [
           kartu ? el('button', {
             class: 'tombol tombol-bahaya',
             onclick: async () => {
@@ -173,7 +194,7 @@ export async function renderKartuAwal(root, { profil, onKeluar, penugasanId }) {
               // yang lebih membingungkan daripada tidak ada kartu.
               const terisi = baris.filter(b => (b.teks || '').trim());
               if (terisi.length === 0) {
-                roti('Kartu belum berisi apa pun. Isi minimal satu baris sebelum menyimpan.', 'galat');
+                roti('Kotak teks di bawah tiap nama baris masih kosong. Isi minimal satu, atau klik Tarik Bahan lalu Tempel.', 'galat');
                 return;
               }
               try {
