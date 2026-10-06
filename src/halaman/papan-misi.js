@@ -23,6 +23,7 @@ import { pantauKendali } from '../lib/realtime-kendali.js';
 import { ambilRubrikProgram } from '../lib/data-nilai.js';
 import { daftarTanggapanPameran, kirimTanggapanPameran, JENIS_TANGGAPAN } from '../lib/data-asesmen.js';
 import { daftarKelompok } from '../lib/data-kelas.js';
+import { kartuAwalSaya } from '../lib/data-kartu.js';
 import { setelBatasWaktu } from '../lib/data-papan.js';
 import { pasangSeret, baruSajaDiseret } from '../lib/seret.js';
 import { state } from '../main.js';
@@ -55,6 +56,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let lembarLepas = [];
   let lembarDiagnostik = [], isianDiagnostik = new Map(), galatDiagnostik = '';
   let tanggapanList = [], kelompokKelas = [];
+  let kartuAwal = null;
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
@@ -107,6 +109,8 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       modeRefleksiPerTahap = await refleksiPerTahap(penugasan.tujuan_pembelajaran_id);
       rubrikProgram = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
+      // RLS sudah menyaring: murid hanya menerima kartu kelompoknya sendiri.
+      try { kartuAwal = await kartuAwalSaya(penugasanId); } catch { kartuAwal = null; }
       if (penugasan.tujuan_pembelajaran?.pameran_aktif) {
         try {
           [tanggapanList, kelompokKelas] = await Promise.all([
@@ -837,6 +841,22 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   }
 
   /** Panel asesmen diagnostik, tampil di atas daftar misi. */
+  /** Kartu Awal kelompok — rujukan hasil kerja pada TP sebelumnya. */
+  function gambarKartuAwal() {
+    if (!kartuAwal || !(kartuAwal.isi || []).length) return null;
+    return el('details', { class: 'kartu panel-kartu-awal', style: 'margin-bottom:16px;' }, [
+      el('summary', {}, [
+        el('span', { style: 'font-weight:650;' }, kartuAwal.judul || 'Kartu Awal Kelompokku'),
+        el('span', { class: 'lencana', style: 'margin-left:8px;' }, `${kartuAwal.isi.length} bagian`)
+      ]),
+      el('div', { style: 'margin-top:10px;display:flex;flex-direction:column;gap:10px;' },
+        kartuAwal.isi.map(b => el('div', { class: 'baris-kartu-awal' }, [
+          el('div', { style: 'font-size:12px;font-weight:650;color:var(--abu-teks);margin-bottom:3px;' }, b.label || ''),
+          el('div', { style: 'font-size:13.5px;white-space:pre-wrap;' }, b.teks || '—')
+        ])))
+    ]);
+  }
+
   function gambarPanelDiagnostik() {
     if (lembarDiagnostik.length === 0) return null;
     const belum = diagnostikBelumTuntas();
@@ -1105,6 +1125,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         kendali === 'dijeda' ? el('div', { class: 'panel-info', style: 'margin-bottom:16px;background:var(--kuning-lembut);border-color:#ffe380;color:#974F00;' }, 'Akses Anda sedang dijeda oleh guru — Anda bisa melihat, tapi tidak bisa memulai misi baru sampai diaktifkan kembali.') : null,
         gambarStatusTenggat(),
         gambarPetunjuk(),
+        gambarKartuAwal(),
         gambarPanelDiagnostik(),
         gambarRingkasProgres(),
         kelompokSaya ? el('div', { class: 'panel-info', style: 'margin-bottom:16px;' }, `Kelompok Anda: ${kelompokSaya.nama}`) : null,

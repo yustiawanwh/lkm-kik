@@ -878,6 +878,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
                 : 'Murid tidak bisa mengerjakan lagi.'
             }, p.dibuka ? 'Terbuka' : 'Ditutup'),
             el('div', { class: 'aksi-baris' }, [
+              el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/kartu/${p.id}`) }, ikonTeks('catatan', 'Kartu Awal')),
               el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: () => navigasi(`#/guru/pantau/${p.id}`) }, ikonTeks('papan', 'Pantau')),
               el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/nilai/${p.id}`) }, ikonTeks('nilai', 'Nilai')),
               el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => navigasi(`#/guru/asesmen/${p.id}`) }, ikonTeks('asesmen', 'Asesmen')),
