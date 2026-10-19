@@ -98,6 +98,34 @@ export async function tarikBahanKartu(penugasanSumber, kelompokId) {
  * seperti "m1" atau "k0" — guru tidak bisa tahu jawaban itu untuk
  * pertanyaan yang mana, sehingga bahannya tidak berguna.
  */
+/** Rangkum jawaban satu medan pilihan menjadi satu untaian terbaca.
+ *  Jawaban "Lainnya" ikut dibawa dan ditandai, karena justru itu bagian yang
+ *  ditulis murid sendiri. */
+/** Centang disimpan sebagai '1' / '' karena RPC penyimpan sel bertipe text
+ *  (lihat CENTANG di lembar-tipe-khas.js). "false" dan "0" ikut ditangani
+ *  agar data lama tetap terbaca benar. */
+function benar(nilai) {
+  if (nilai === true) return true;
+  if (nilai === false || nilai === null || nilai === undefined) return false;
+  const t = String(nilai).trim().toLowerCase();
+  return t !== '' && t !== '0' && t !== 'false';
+}
+
+function bacaPilihan(m, data) {
+  const nilai = data?.pilihan?.[m.key];
+  const bagian = [];
+  if (m.tipe === 'pilihan_ganda') {
+    if (nilai && typeof nilai === 'object') {
+      for (const [opsi, dipilih] of Object.entries(nilai)) if (benar(dipilih)) bagian.push(opsi);
+    }
+  } else if (nilai !== null && nilai !== undefined && String(nilai).trim() !== '') {
+    bagian.push(String(nilai).trim());
+  }
+  const lain = data?.pilihan_lain?.[m.key];
+  if (lain && String(lain).trim() !== '') bagian.push(`Lainnya: ${String(lain).trim()}`);
+  return bagian.join(', ');
+}
+
 export function bacaIsianTerbaca(lembar, data) {
   const st = lembar?.struktur || {};
   const hasil = [];
@@ -106,6 +134,12 @@ export function bacaIsianTerbaca(lembar, data) {
   // Formulir: kunci isian dipetakan ke labelnya.
   if (Array.isArray(st.medan) && st.medan.length) {
     for (const m of st.medan) {
+      // Medan pilihan disimpan di cabang `pilihan`, bukan di akar data.
+      if (m.tipe === 'pilihan' || m.tipe === 'pilihan_ganda') {
+        const teks = bacaPilihan(m, data);
+        if (teks) hasil.push({ label: m.label || m.key, teks });
+        continue;
+      }
       const v = bersih(data?.[m.key]);
       if (v) hasil.push({ label: m.label || m.key, teks: v });
     }
@@ -127,6 +161,20 @@ export function bacaIsianTerbaca(lembar, data) {
     });
   }
 
+  // Daftar Periksa: dilaporkan sebagai "sudah dicentang N orang", karena
+  // kunci di dalamnya adalah id murid yang tidak berarti apa-apa bagi guru.
+  if (data?.periksa && typeof data.periksa === 'object') {
+    const langkah = st.butir_periksa || [];
+    for (const [i, kolom] of Object.entries(data.periksa)) {
+      const jml = Object.values(kolom || {}).filter(benar).length;
+      if (jml === 0) continue;
+      hasil.push({
+        label: langkah[Number(i)] || `Langkah ${Number(i) + 1}`,
+        teks: `dicentang ${jml} anggota`
+      });
+    }
+  }
+
   // Likert: nomor butir dipetakan ke bunyi pernyataannya.
   if (data?.butir && typeof data.butir === 'object') {
     const butir = st.butir || [];
@@ -138,7 +186,7 @@ export function bacaIsianTerbaca(lembar, data) {
 
   // Sisa kunci yang belum tertangani (kanvas, tahapan, instrumen).
   const sudah = new Set([
-    ...(st.medan || []).map(m => m.key), 'baris', 'butir'
+    ...(st.medan || []).map(m => m.key), 'baris', 'butir', 'pilihan', 'pilihan_lain', 'periksa'
   ]);
   for (const [k, v] of Object.entries(data || {})) {
     if (sudah.has(k)) continue;

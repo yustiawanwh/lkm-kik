@@ -24,6 +24,10 @@ import { ambilRubrikProgram } from '../lib/data-nilai.js';
 import { daftarTanggapanPameran, kirimTanggapanPameran, JENIS_TANGGAPAN } from '../lib/data-asesmen.js';
 import { daftarKelompok } from '../lib/data-kelas.js';
 import { kartuAwalSaya } from '../lib/data-kartu.js';
+import {
+  daftarPeranTp, peranKelompokSaya, berikanPeran, cabutPeran, ubahCatatanPeran
+} from '../lib/data-peran.js';
+import { sasaranRotasi, penanggapRotasi } from '../lib/rotasi-pameran.js';
 import { setelBatasWaktu } from '../lib/data-papan.js';
 import { pasangSeret, baruSajaDiseret } from '../lib/seret.js';
 import { state } from '../main.js';
@@ -57,6 +61,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
   let lembarDiagnostik = [], isianDiagnostik = new Map(), galatDiagnostik = '';
   let tanggapanList = [], kelompokKelas = [];
   let kartuAwal = null;
+  let peranList = [], peranSaya = [], anggotaSaya = [], sayaKetua = false;
   let kendali = 'aktif';
   let petunjukTerbuka = false;
   let promptRefleksi = [];
@@ -111,6 +116,19 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
       rubrikProgram = await ambilRubrikProgram(penugasan.tujuan_pembelajaran_id);
       // RLS sudah menyaring: murid hanya menerima kartu kelompoknya sendiri.
       try { kartuAwal = await kartuAwalSaya(penugasanId); } catch { kartuAwal = null; }
+
+      // Peran kelompok pada TP ini. Dibungkus try sendiri supaya kegagalan
+      // di sini tidak ikut menjatuhkan seluruh papan misi.
+      try {
+        peranList = await daftarPeranTp(penugasanId);
+        if (kelompokSaya) {
+          [peranSaya, anggotaSaya] = await Promise.all([
+            peranKelompokSaya(penugasanId, kelompokSaya.id),
+            anggotaKelompokLembar(kelompokSaya.id)
+          ]);
+          sayaKetua = anggotaSaya.some(a => a.murid_id === profil.id && a.peran_dalam_kelompok === 'ketua');
+        }
+      } catch { peranList = []; peranSaya = []; }
       if (penugasan.tujuan_pembelajaran?.pameran_aktif) {
         try {
           [tanggapanList, kelompokKelas] = await Promise.all([
@@ -860,6 +878,112 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
     ]);
   }
 
+  // ---------- Peran kelompok pada TP ini ----------
+  /** Peran hanya berlaku untuk TP ini. Yang boleh membaginya adalah KETUA
+   *  kelompok (sesuai LKM: kelompok membagi perannya sendiri) selama
+   *  penugasan masih terbuka; anggota lain melihatnya saja, kecuali kolom
+   *  tambahan pada perannya sendiri. */
+  function gambarPanelPeran() {
+    if (peranList.length === 0) return null;
+    if (!kelompokSaya) {
+      return el('div', { class: 'panel-info', style: 'margin-bottom:16px;' },
+        'TP ini punya pembagian peran kelompok, tetapi Anda belum tergabung di kelompok mana pun. Hubungi guru Anda.');
+    }
+
+    const bisaBagi = sayaKetua && !!penugasan?.dibuka && kendali === 'aktif';
+    const terbagi = peranList.filter(p => peranSaya.some(x => x.peran_id === p.id)).length;
+
+    function namaAnggota(a) {
+      return (a.profil?.nama || 'Murid');
+    }
+
+    return el('details', {
+      class: 'kartu panel-peran',
+      style: 'margin-bottom:16px;',
+      open: terbagi < peranList.length ? true : undefined
+    }, [
+      el('summary', {}, [
+        el('span', { style: 'font-weight:650;' }, 'Peran Kelompok pada TP Ini'),
+        el('span', {
+          class: 'lencana',
+          style: 'margin-left:8px;' + (terbagi === peranList.length
+            ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : '')
+        }, `${terbagi} dari ${peranList.length} terbagi`)
+      ]),
+      el('div', { style: 'margin-top:10px;' }, [
+        el('div', { class: 'keterangan', style: 'margin:0 0 10px;' }, bisaBagi
+          ? 'Sebagai ketua, Anda yang membagi peran ini. Pembagian hanya berlaku untuk TP ini — pada TP berikutnya boleh berbeda.'
+          : (sayaKetua
+              ? 'Penugasan sudah ditutup, jadi pembagian peran tidak bisa diubah lagi.'
+              : 'Pembagian ini diatur oleh ketua kelompok atau guru. Anda tetap bisa mengisi kolom tambahan pada peran Anda sendiri.')),
+        el('div', { class: 'daftar-baris' }, peranList.map(p => {
+          const pm = peranSaya.find(x => x.peran_id === p.id) || null;
+          const sayaPemegang = pm?.murid_id === profil.id;
+          return el('div', { class: 'baris-item' }, [
+            el('div', { class: 'isi-utama' }, [
+              el('div', { class: 'judul-baris' }, p.nama),
+              p.deskripsi ? el('div', { class: 'meta-baris' }, p.deskripsi) : null,
+              el('div', { style: 'font-size:12.5px;margin-top:3px;' }, pm
+                ? [
+                    el('strong', {}, pm.profil?.nama || namaAnggota({ profil: pm.profil })),
+                    sayaPemegang ? el('span', { class: 'lencana', style: 'margin-left:6px;' }, 'Anda') : null
+                  ]
+                : el('span', { style: 'color:var(--abu-teks-halus);' }, 'Belum ada yang memegang'))
+            ]),
+            el('div', { style: 'display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;' }, [
+              bisaBagi
+                ? el('select', {
+                    style: 'min-width:170px;',
+                    onchange: async (e) => {
+                      const muridBaru = e.target.value;
+                      try {
+                        if (!muridBaru) {
+                          if (pm) await cabutPeran(pm.id);
+                        } else {
+                          if (pm && pm.murid_id !== muridBaru) await cabutPeran(pm.id);
+                          await berikanPeran({
+                            penugasanId, peranId: p.id,
+                            kelompokId: kelompokSaya.id, muridId: muridBaru,
+                            catatan: pm?.murid_id === muridBaru ? pm.catatan : ''
+                          });
+                        }
+                        peranSaya = await peranKelompokSaya(penugasanId, kelompokSaya.id);
+                        roti('Pembagian peran disimpan.', 'sukses');
+                        render();
+                      } catch (err) { roti(pesanGalat(err), 'galat'); }
+                    }
+                  }, [
+                    el('option', { value: '' }, '— belum ditentukan —'),
+                    ...anggotaSaya.map(a => el('option', {
+                      value: a.murid_id, selected: a.murid_id === pm?.murid_id
+                    }, namaAnggota(a)))
+                  ])
+                : null,
+              // Kolom tambahan (mis. username GitHub) hanya bisa diisi oleh
+              // pemegang perannya sendiri, atau oleh ketua yang membaginya.
+              (p.label_catatan && pm && (sayaPemegang || bisaBagi))
+                ? el('div', { style: 'display:flex;gap:6px;align-items:center;' }, [
+                    el('span', { style: 'font-size:12px;color:var(--abu-teks);' }, p.label_catatan),
+                    el('input', {
+                      value: pm.catatan || '', placeholder: p.label_catatan,
+                      style: 'width:170px;',
+                      onchange: async (e) => {
+                        try { await ubahCatatanPeran(pm.id, e.target.value); roti('Tersimpan.', 'sukses'); }
+                        catch (err) { roti(pesanGalat(err), 'galat'); }
+                      }
+                    })
+                  ])
+                : (p.label_catatan && pm)
+                    ? el('span', { style: 'font-size:12px;color:var(--abu-teks);' },
+                        `${p.label_catatan}: ${pm.catatan || '—'}`)
+                    : null
+            ])
+          ]);
+        }))
+      ])
+    ]);
+  }
+
   function gambarPanelDiagnostik() {
     if (lembarDiagnostik.length === 0) return null;
     const belum = diagnostikBelumTuntas();
@@ -955,13 +1079,26 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
     if (kelompokKelas.length === 0) {
       return el('div', { class: 'kartu-kosong' }, 'Belum ada kelompok di kelas ini.');
     }
-    const lain = kelompokKelas.filter(k => k.id !== kelompokSaya?.id);
+    // Dengan rotasi, kelompokmu hanya menanggapi SATU kelompok. Tujuannya
+    // agar tidak ada kelompok yang tidak menerima tanggapan sama sekali.
+    const rotasi = !!penugasan?.tujuan_pembelajaran?.pameran_rotasi;
+    const sasaran = rotasi ? sasaranRotasi(kelompokKelas, kelompokSaya?.id) : null;
+    const penanggap = rotasi ? penanggapRotasi(kelompokKelas, kelompokSaya?.id) : null;
+    const lain = rotasi
+      ? (sasaran ? [sasaran] : [])
+      : kelompokKelas.filter(k => k.id !== kelompokSaya?.id);
 
     return el('div', {}, [
       el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
-        'Kunjungi karya kelompok lain, lalu tinggalkan tanggapan. Aturannya: tulis dulu, ' +
-        'tidak ada gagasan yang ditertawakan, dan kritik disampaikan sebagai "Bagaimana jika ...?". ' +
-        'Kamu tidak bisa menanggapi kelompokmu sendiri.'),
+        rotasi
+          ? (sasaran
+              ? `Pada TP ini pembagiannya tetap: kelompokmu menanggapi ${sasaran.nama}` +
+                (penanggap ? `, dan kelompokmu ditanggapi oleh ${penanggap.nama}` : '') +
+                '. Aturannya: tulis dulu, tidak ada gagasan yang ditertawakan, dan kritik disampaikan sebagai "Bagaimana jika ...?".'
+              : 'Rotasi tanggapan aktif, tetapi kelompok sasaranmu belum bisa ditentukan — mungkin kelasmu baru punya satu kelompok, atau kamu belum tergabung di kelompok mana pun.')
+          : 'Kunjungi karya kelompok lain, lalu tinggalkan tanggapan. Aturannya: tulis dulu, ' +
+            'tidak ada gagasan yang ditertawakan, dan kritik disampaikan sebagai "Bagaimana jika ...?". ' +
+            'Kamu tidak bisa menanggapi kelompokmu sendiri.'),
 
       kelompokSaya ? el('div', { style: 'margin-bottom:18px;' }, [
         el('div', { class: 'judul-grup' }, [
@@ -971,6 +1108,10 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         ]),
         gambarDaftarTanggapan(kelompokSaya.id, false)
       ]) : null,
+
+      (rotasi && lain.length === 0)
+        ? el('div', { class: 'kartu-kosong' }, 'Belum ada kelompok yang menjadi sasaran tanggapan kelompokmu.')
+        : null,
 
       ...lain.map(k => el('div', { style: 'margin-bottom:18px;' }, [
         el('div', { class: 'judul-grup' }, [
@@ -1129,6 +1270,7 @@ export async function renderPapanMisi(root, { profil, onKeluar, penugasanId }) {
         gambarStatusTenggat(),
         gambarPetunjuk(),
         gambarKartuAwal(),
+        gambarPanelPeran(),
         gambarPanelDiagnostik(),
         gambarRingkasProgres(),
         kelompokSaya ? el('div', { class: 'panel-info', style: 'margin-bottom:16px;' }, `Kelompok Anda: ${kelompokSaya.nama}`) : null,

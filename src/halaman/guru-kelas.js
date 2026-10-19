@@ -21,6 +21,7 @@ import { sejawatMurid, riwayatSikapMurid, updateObservasiSikap, hapusObservasiSi
 import { panelRujukanSejawat } from '../lib/rujukan-sejawat.js';
 import { saranSikapDariSejawat, RENTANG_BAWAAN } from '../lib/saran-sikap.js';
 import { ambilSemuaPengaturan } from '../lib/data-pengaturan.js';
+import { hitungTunggakan, kirimPengingat } from '../lib/data-pengingat.js';
 
 // ============================================================
 // DAFTAR KELAS
@@ -790,6 +791,78 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
   }
 
   // ---------- Susulan ----------
+  /** Pengingat tenggat. Daftar penunggak ditampilkan LEBIH DULU, sebelum
+   *  apa pun terkirim — guru perlu melihat kepada siapa pesan akan masuk,
+   *  karena pesannya tidak bisa ditarik kembali. */
+  async function bukaDialogPengingat(p) {
+    const area = el('div', {}, [el('div', { style: 'color:var(--abu-teks);font-size:13px;' }, 'Menghitung tunggakan…')]);
+    const { tutup } = dialog({
+      judul: `Pengingat Tenggat — ${p.tujuan_pembelajaran?.judul || 'Program'}`,
+      isi: area
+    });
+
+    let tunggakan = [];
+    try {
+      tunggakan = await hitungTunggakan(p.id);
+    } catch (err) {
+      isi(area, [el('div', { class: 'panel-info', style: 'background:var(--merah-lembut);color:var(--merah-teks);border-color:transparent;' }, pesanGalat(err))]);
+      return;
+    }
+
+    if (tunggakan.length === 0) {
+      isi(area, [
+        el('div', { class: 'panel-info' }, 'Tidak ada murid yang menunggak pada penugasan ini. Tidak ada pesan yang perlu dikirim.'),
+        el('div', { style: 'display:flex;justify-content:flex-end;margin-top:12px;' }, [
+          el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Tutup')
+        ])
+      ]);
+      return;
+    }
+
+    isi(area, [
+      el('div', { class: 'panel-info', style: 'margin-bottom:12px;' }, [
+        el('div', { style: 'font-weight:650;margin-bottom:4px;' }, `${tunggakan.length} murid belum menyerahkan semua tugasnya`),
+        el('div', { style: 'font-size:13px;' },
+          'Pesan dikirim ke ruang obrolan PRIVAT tiap murid, bukan ke kanal kelas — supaya tidak ada yang disebut namanya di depan kelas. ' +
+          'Murid yang sudah menerima pengingat dalam 20 jam terakhir dilewati, jadi tombol ini aman ditekan dua kali.')
+      ]),
+      el('div', { class: 'daftar-baris', style: 'max-height:260px;overflow-y:auto;margin-bottom:12px;' },
+        tunggakan.map(t => el('div', { class: 'baris-item' }, [
+          el('span', { class: 'lencana' }, String(t.belum.length)),
+          el('div', { class: 'isi-utama' }, [
+            el('div', { class: 'judul-baris' },
+              (t.murid.no_absen ? `${t.murid.no_absen}. ` : '') + (t.murid.nama || 'Murid')),
+            el('div', { class: 'meta-baris' },
+              t.belum.slice(0, 3).map(x => x.kode || x.judul).join(', ') +
+              (t.belum.length > 3 ? `, +${t.belum.length - 3}` : ''))
+          ])
+        ]))),
+      el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
+        el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
+        el('button', {
+          class: 'tombol tombol-primer',
+          onclick: async (e) => {
+            const tombol = e.currentTarget;
+            tombol.disabled = true;
+            const lonceng = roti('Mengirim pengingat…', 'info', 0);
+            try {
+              const h = await kirimPengingat(p.id, profil.id, {
+                onKemajuan: (ke, dari) => { if (lonceng) lonceng.textContent = `Mengirim pengingat… ${ke} dari ${dari}`; }
+              });
+              lonceng?.remove(); tutup();
+              roti(`${h.terkirim} pengingat terkirim` +
+                   (h.dilewati ? `, ${h.dilewati} dilewati karena baru diingatkan` : '') +
+                   (h.gagal ? `, ${h.gagal} gagal` : '') + '.', h.gagal ? 'info' : 'sukses');
+            } catch (err) {
+              lonceng?.remove(); tombol.disabled = false;
+              roti(pesanGalat(err), 'galat');
+            }
+          }
+        }, 'Kirim Pengingat')
+      ])
+    ]);
+  }
+
   async function bukaDialogSusulan(p) {
     let sprintsProgram = [];
     try { sprintsProgram = await ambilStrukturProgram(p.tujuan_pembelajaran_id); }
@@ -898,6 +971,8 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
                 el('span', { class: 'label-gugus' }, 'Bahan & Waktu'),
                 el('div', { class: 'tombol-gugus' }, [
                   el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/kartu/${p.id}`) }, ikonTeks('catatan', 'Kartu Awal')),
+                  el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/peran/${p.id}`) }, ikonTeks('kelas', 'Peran')),
+                  el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPengingat(p) }, ikonTeks('jam', 'Pengingat')),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSusulan(p) }, ikonTeks('kalender', 'Susulan')),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPenugasan(p) }, 'Ubah Tenggat'),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => ubahBukaTutup(p) }, p.dibuka ? 'Tutup' : 'Buka'),

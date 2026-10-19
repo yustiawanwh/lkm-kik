@@ -2,19 +2,25 @@
 // terkumpul: rangkuman penilaian sejawat, refleksi murid, dan riwayat
 // observasi sikap. (Menutup celah: data ini sebelumnya terkumpul tapi tidak
 // pernah bisa dibaca guru.)
-import { el, isi, tanggalId } from '../lib/dom.js';
+// `roti` dipakai saat guru menyembunyikan/menampilkan tanggapan. Sebelumnya
+// tidak ikut diimpor, sehingga tombol Sembunyikan melempar ReferenceError —
+// dan penangkap galatnya pun memanggil roti, jadi kegagalannya tidak
+// tertangani sama sekali.
+import { el, isi, roti, tanggalId } from '../lib/dom.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
 import { rangkumanSejawatGuru, daftarRefleksiPenugasan, daftarSikapKelas, promptRefleksiProgram, INDIKATOR_SIKAP, hasilDiagnostik, daftarTanggapanPameran, ubahSembunyiTanggapan, JENIS_TANGGAPAN } from '../lib/data-asesmen.js';
 import { buatWidgetLembar } from '../lib/lembar-widget.js';
+import { daftarKelompok } from '../lib/data-kelas.js';
+import { rekapRotasi } from '../lib/rotasi-pameran.js';
 
 export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId }) {
   let memuat = true, galat = '', tab = 'sejawat';
   let penugasan = null, sejawat = [], refleksi = [], sikap = [], promptRefleksi = [];
   let diagnostik = { lembar: [], isian: [] };
   let galatDiagnostik = '';
-  let tanggapan = [];
+  let tanggapan = [], kelompokKelas = [];
 
   async function muatSemua() {
     memuat = true; render();
@@ -23,6 +29,9 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
       sejawat = await rangkumanSejawatGuru(penugasanId);
       refleksi = await daftarRefleksiPenugasan(penugasanId);
       sikap = await daftarSikapKelas(penugasan.kelas_id);
+      // Nama kelompok dibutuhkan agar rekap tanggapan tidak lagi menampilkan
+      // potongan id yang tidak berarti apa pun bagi guru.
+      kelompokKelas = await daftarKelompok(penugasan.kelas_id).catch(() => []);
       promptRefleksi = await promptRefleksiProgram(penugasan.tujuan_pembelajaran_id);
       // Galat sengaja DISIMPAN, bukan ditelan — tanpa ini, migrasi yang
       // belum dijalankan hanya membuat tab hilang tanpa penjelasan apa pun.
@@ -157,10 +166,48 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
   }
 
   /** Papan tanggapan antar kelompok, dengan moderasi guru. */
+  /** Rekap pelaksanaan rotasi: kelompok mana yang BELUM menanggapi
+   *  sasarannya. Inilah yang tidak bisa dilihat guru sebelumnya — tanggapan
+   *  yang masuk terlihat, tetapi yang tidak masuk tidak meninggalkan jejak. */
+  function gambarRekapRotasi() {
+    if (!penugasan?.tujuan_pembelajaran?.pameran_rotasi) return null;
+    if (kelompokKelas.length < 2) {
+      return el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
+        'Rotasi tanggapan aktif, tetapi kelas ini belum punya dua kelompok.');
+    }
+    const rekap = rekapRotasi(kelompokKelas, tanggapan);
+    const belum = rekap.filter(r => !r.sudah);
+    return el('div', { class: 'kartu', style: 'padding:12px;margin-bottom:16px;' }, [
+      el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;' }, [
+        el('div', { style: 'font-weight:650;font-size:13px;' }, 'Pelaksanaan Rotasi'),
+        el('span', {
+          class: 'lencana',
+          style: belum.length === 0 ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : ''
+        }, belum.length === 0 ? 'Semua kelompok sudah menanggapi' : `${belum.length} kelompok belum menanggapi`)
+      ]),
+      el('div', { class: 'daftar-baris' }, rekap.map(r => el('div', { class: 'baris-item' }, [
+        el('span', {
+          class: 'lencana',
+          style: r.sudah ? 'background:var(--hijau-lembut);color:var(--hijau-teks);border-color:transparent;' : ''
+        }, r.sudah ? '✓' : '—'),
+        el('div', { class: 'isi-utama' }, [
+          el('div', { class: 'judul-baris' }, `${r.kelompok.nama} → ${r.sasaran?.nama || '(tidak ada sasaran)'}`),
+          el('div', { class: 'meta-baris' }, r.sudah
+            ? `${r.jumlah} tanggapan terkirim`
+            : 'Belum mengirim tanggapan ke sasarannya')
+        ])
+      ])))
+    ]);
+  }
+
   function gambarPameran() {
+    const namaKelompok = new Map(kelompokKelas.map(k => [k.id, k.nama]));
     if (tanggapan.length === 0) {
-      return el('div', { class: 'kartu-kosong' },
-        'Belum ada tanggapan. Pastikan Papan Tanggapan sudah diaktifkan di Penyunting Program → Edit Detail.');
+      return el('div', {}, [
+        gambarRekapRotasi(),
+        el('div', { class: 'kartu-kosong' },
+          'Belum ada tanggapan. Pastikan Papan Tanggapan sudah diaktifkan di Penyunting Program → Edit Detail.')
+      ]);
     }
     const perKelompok = new Map();
     for (const t of tanggapan) {
@@ -168,9 +215,9 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
       if (!perKelompok.has(k)) perKelompok.set(k, []);
       perKelompok.get(k).push(t);
     }
-    return el('div', {}, [...perKelompok.entries()].map(([kid, isi]) => el('div', { style: 'margin-bottom:18px;' }, [
+    return el('div', {}, [gambarRekapRotasi(), ...[...perKelompok.entries()].map(([kid, isi]) => el('div', { style: 'margin-bottom:18px;' }, [
       el('div', { class: 'judul-grup' }, [
-        el('span', {}, `Tanggapan untuk kelompok ${isi[0]?.kelompok_asal?.nama ? '' : ''}${kid.slice(0, 8)}`),
+        el('span', {}, `Tanggapan untuk ${namaKelompok.get(kid) || 'kelompok (sudah dihapus)'}`),
         el('span', { class: 'lencana' }, `${isi.filter(t => !t.disembunyikan).length} tampil`)
       ]),
       el('div', { class: 'daftar-baris' }, isi.map(t => el('div', { class: 'baris-item' + (t.disembunyikan ? ' baris-redup' : '') }, [
@@ -193,7 +240,7 @@ export async function renderAsesmenGuru(root, { profil, onKeluar, penugasanId })
           }
         }, t.disembunyikan ? 'Tampilkan' : 'Sembunyikan')
       ])))
-    ])));
+    ]))]);
   }
 
   function gambarTabTombol(kunci, label) {

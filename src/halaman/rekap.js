@@ -51,7 +51,12 @@ export async function renderRekap(root, { profil, onKeluar }) {
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM agar Excel baca UTF-8 benar
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `rekap-nilai-${namaKelas.replace(/\s+/g, '-')}.csv`;
+    // namaTp WAJIB masuk ke nama berkas. Tanpa itu, rekap tiap TP dan rekap
+    // seluruh TP memakai nama yang sama, sehingga saling menimpa di folder
+    // unduhan dan guru tidak bisa tahu lagi berkas mana milik TP mana.
+    const rapi = (t) => String(t).replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '');
+    a.href = url;
+    a.download = `rekap-nilai-${rapi(namaKelas)}-${rapi(namaTp)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     roti('CSV diunduh.', 'sukses');

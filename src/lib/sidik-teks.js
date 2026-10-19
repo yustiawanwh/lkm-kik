@@ -22,8 +22,21 @@ export function normalkan(teks) {
 /** Kumpulkan seluruh teks dalam sebuah isian menjadi satu untaian.
  *  Struktur datanya bersarang dan berbeda-beda per tipe lembar, jadi
  *  ditelusuri secara umum alih-alih per tipe. */
+/** Cabang data yang bukan tulisan murid, jadi tidak ikut dibandingkan.
+ *  `pilihan` berisi label kotak centang yang memang sama untuk semua murid —
+ *  kalau disertakan, satu kelas akan tampak saling menyalin. Jawaban
+ *  "Lainnya" (`pilihan_lain`) tetap dihitung karena itu karangan sendiri. */
+const CABANG_BUKAN_TULISAN = new Set(['pilihan']);
+
 export function kumpulkanTeks(data) {
   const bagian = [];
+
+  // Kunci tingkat atas yang dikecualikan dibuang sebelum penelusuran.
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    data = Object.fromEntries(
+      Object.entries(data).filter(([k]) => !CABANG_BUKAN_TULISAN.has(k)));
+  }
+
   (function telusuri(nilai) {
     if (nilai === null || nilai === undefined) return;
     if (typeof nilai === 'string') {

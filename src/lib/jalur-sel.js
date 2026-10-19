@@ -20,6 +20,17 @@ export function terapkanNilaiJauh(root, path, nilai) {
   const sel = root?.querySelector?.(`[data-jalur="${CSS.escape(kunci)}"]`);
   if (!sel) return false;
 
+  // Centang ganda menyimpan true/false, bukan teks pilihan. Tiap opsi punya
+  // jalurnya sendiri, jadi tidak ada grup yang perlu dicari.
+  if (sel.dataset?.pilihanGanda === '1') {
+    // Centang disimpan sebagai '1' / '' (lihat CENTANG di lembar-tipe-khas.js),
+    // tetapi "false" dan "0" ikut ditangani agar data lama pun terbaca benar.
+    const t = String(nilai ?? '').trim().toLowerCase();
+    sel.checked = nilai === true || (t !== '' && t !== '0' && t !== 'false');
+    kedip(sel.closest('label') || sel);
+    return true;
+  }
+
   if (sel.type === 'radio' || sel.type === 'checkbox') {
     // Untuk Likert: radio dikelompokkan per butir, cari yang nilainya cocok.
     const grup = root.querySelectorAll(`[data-jalur="${CSS.escape(kunci)}"]`);

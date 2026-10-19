@@ -32,6 +32,9 @@ import { renderAsesmenGuru } from './halaman/asesmen-guru.js';
 import { renderPantau } from './halaman/pantau.js';
 import { renderObrolan } from './halaman/obrolan.js';
 import { renderKartuAwal } from './halaman/kartu-awal.js';
+import { renderPeranTp } from './halaman/peran-tp.js';
+import { mulaiSimpanLuring } from './lib/simpan-luring.js';
+import { mulaiPenandaLuring } from './lib/penanda-luring.js';
 
 const app = document.getElementById('app');
 
@@ -81,6 +84,7 @@ const POLA_RUTE = [
   '#/kelola',
   '#/profil',
   '#/guru/kartu/:penugasanId',
+  '#/guru/peran/:penugasanId',
   '#/obrolan/:kanalId',
   '#/obrolan'
 ];
@@ -155,6 +159,8 @@ async function route() {
     await renderBadgeMurid(app, konteks);
   } else if (pola === '#/guru/kartu/:penugasanId') {
     await renderKartuAwal(app, { ...konteks, penugasanId: params.penugasanId });
+  } else if (pola === '#/guru/peran/:penugasanId') {
+    await renderPeranTp(app, { ...konteks, penugasanId: params.penugasanId });
   } else if (pola === '#/obrolan' || pola === '#/obrolan/:kanalId') {
     await renderObrolan(app, { ...konteks, kanalId: params.kanalId || null });
   } else if (pola === '#/profil') {
@@ -269,4 +275,9 @@ async function mulai() {
 }
 
 siapkanTema();
+// Antrean simpan luring dinyalakan SEBELUM halaman pertama digambar, agar
+// pekerjaan yang tertinggal dari sesi sebelumnya (jaringan mati lalu
+// aplikasi ditutup) langsung dikirim begitu aplikasi dibuka.
+mulaiSimpanLuring();
+mulaiPenandaLuring();
 mulai();

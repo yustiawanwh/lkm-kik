@@ -146,31 +146,84 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
     const medan = Array.isArray(struktur.medan) ? struktur.medan : [];
     const area = el('div', {});
 
-    function gambar() {
-      isi(area, [
-        ...medan.map((m, i) => el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;background:var(--permukaan-2);' }, [
-          el('div', { style: 'display:flex;gap:6px;align-items:center;' }, [
+    /** Daftar pilihan untuk medan bertipe pilihan. Hanya digambar bila
+     *  tipenya memang pilihan, supaya isian teks biasa tetap sederhana. */
+    function bagianOpsi(m) {
+      const opsi = Array.isArray(m.opsi) ? m.opsi : (m.opsi = []);
+      const wadahOpsi = el('div', { style: 'margin-top:8px;' });
+
+      function gambarOpsi() {
+        isi(wadahOpsi, [
+          el('div', { style: 'font-size:12px;color:var(--abu-teks);margin-bottom:5px;' }, 'Pilihan yang tersedia:'),
+          ...opsi.map((o, oi) => el('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:5px;' }, [
+            el('span', { style: 'width:18px;flex-shrink:0;text-align:right;color:var(--abu-teks-halus);font-size:12px;' }, String(oi + 1)),
             el('input', {
-              value: m.label || '', placeholder: 'Pertanyaan / label isian',
-              oninput: (e) => {
-                m.label = e.target.value;
-                if (!m.key) m.key = `m${i + 1}`;
-                struktur.medan = medan;
-              }
+              value: o, placeholder: 'mis. Ya, bisa dibuat',
+              oninput: (e) => { opsi[oi] = e.target.value; struktur.medan = medan; }
             }),
-            el('select', {
-              style: 'width:150px;flex-shrink:0;',
-              onchange: (e) => { m.tipe = e.target.value; struktur.medan = medan; }
-            }, [
-              el('option', { value: 'textarea', selected: (m.tipe ?? 'textarea') === 'textarea' }, 'Jawaban panjang'),
-              el('option', { value: 'input', selected: m.tipe === 'input' }, 'Jawaban pendek')
-            ]),
             el('button', {
               class: 'tombol tombol-hantu tombol-kecil', type: 'button', style: 'flex-shrink:0;',
-              onclick: () => { medan.splice(i, 1); struktur.medan = medan; gambar(); }
+              onclick: () => { opsi.splice(oi, 1); gambarOpsi(); }
             }, ikon('tutup', 14))
+          ])),
+          el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;' }, [
+            el('button', {
+              class: 'tombol tombol-sekunder tombol-kecil', type: 'button',
+              onclick: () => { opsi.push(''); gambarOpsi(); }
+            }, [ikon('tambah', 14), el('span', {}, ' Tambah Pilihan')]),
+            el('label', { style: 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;' }, [
+              el('input', {
+                type: 'checkbox', checked: !!m.lain_lain,
+                onchange: (e) => { m.lain_lain = e.target.checked; struktur.medan = medan; }
+              }),
+              el('span', {}, 'Sediakan kotak "Lainnya"')
+            ])
           ])
-        ])),
+        ]);
+      }
+      gambarOpsi();
+      return wadahOpsi;
+    }
+
+    function gambar() {
+      isi(area, [
+        ...medan.map((m, i) => {
+          const tipeSekarang = m.tipe ?? 'textarea';
+          const pilihan = tipeSekarang === 'pilihan' || tipeSekarang === 'pilihan_ganda';
+          return el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;background:var(--permukaan-2);' }, [
+            el('div', { style: 'display:flex;gap:6px;align-items:center;' }, [
+              el('input', {
+                value: m.label || '', placeholder: 'Pertanyaan / label isian',
+                oninput: (e) => {
+                  m.label = e.target.value;
+                  if (!m.key) m.key = `m${i + 1}`;
+                  struktur.medan = medan;
+                }
+              }),
+              el('select', {
+                style: 'width:170px;flex-shrink:0;',
+                onchange: (e) => {
+                  m.tipe = e.target.value;
+                  // Beri satu pilihan kosong supaya guru langsung melihat
+                  // tempat mengetiknya, bukan daftar kosong tanpa petunjuk.
+                  if ((m.tipe === 'pilihan' || m.tipe === 'pilihan_ganda') && !m.opsi?.length) m.opsi = [''];
+                  struktur.medan = medan;
+                  gambar();
+                }
+              }, [
+                el('option', { value: 'textarea', selected: tipeSekarang === 'textarea' }, 'Jawaban panjang'),
+                el('option', { value: 'input', selected: tipeSekarang === 'input' }, 'Jawaban pendek'),
+                el('option', { value: 'pilihan', selected: tipeSekarang === 'pilihan' }, 'Pilih satu'),
+                el('option', { value: 'pilihan_ganda', selected: tipeSekarang === 'pilihan_ganda' }, 'Pilih beberapa')
+              ]),
+              el('button', {
+                class: 'tombol tombol-hantu tombol-kecil', type: 'button', style: 'flex-shrink:0;',
+                onclick: () => { medan.splice(i, 1); struktur.medan = medan; gambar(); }
+              }, ikon('tutup', 14))
+            ]),
+            pilihan ? bagianOpsi(m) : null
+          ]);
+        }),
         el('button', {
           class: 'tombol tombol-sekunder tombol-kecil', type: 'button',
           onclick: () => { medan.push({ key: `m${medan.length + 1}`, label: '', tipe: 'textarea' }); struktur.medan = medan; gambar(); }
@@ -183,6 +236,101 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
       el('label', {}, 'Daftar Isian'),
       el('div', { class: 'keterangan', style: 'margin:0 0 8px;' }, 'Tiap baris menjadi satu pertanyaan yang diisi murid.'),
       area
+    ]);
+  }
+
+  /**
+   * Daftar bagian bernama + keterangan. Dipakai Kanvas (kotak) dan Tahapan
+   * (langkah), yang bentuk strukturnya sama: deretan objek {key, label, ...}.
+   *
+   * Khusus Kanvas, posisi kotak TIDAK diminta dari guru. Kotak cukup
+   * diurutkan dan jumlah kolomnya dipilih; perendernya yang menata. Meminta
+   * guru mengisi "kol: 1 / 3" sama saja dengan tetap memaksa mode JSON.
+   */
+  function bagianBernama({ kunci, label, keterangan, labelItem, pakaiDeskripsi, pakaiKolom }) {
+    const daftar = Array.isArray(struktur[kunci]) ? struktur[kunci] : [];
+    const area = el('div', {});
+
+    /** Kunci data dibuat dari labelnya agar mudah dilacak, tapi tetap aman
+     *  sebagai kunci JSON. Kunci yang sudah ada TIDAK diubah: mengubahnya
+     *  akan memutus hubungan dengan jawaban murid yang sudah tersimpan. */
+    function kunciDari(teks, i) {
+      const dasar = String(teks || '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24);
+      return dasar || `b${i + 1}`;
+    }
+
+    function gambarDaftar() {
+      isi(area, [
+        ...daftar.map((b, i) => el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;background:var(--permukaan-2);' }, [
+          el('div', { style: 'display:flex;gap:6px;align-items:center;' }, [
+            el('span', { style: 'width:20px;flex-shrink:0;text-align:right;color:var(--abu-teks-halus);font-size:12px;' }, String(i + 1)),
+            el('input', {
+              value: b.label || '', placeholder: labelItem,
+              style: 'font-weight:600;',
+              oninput: (e) => {
+                b.label = e.target.value;
+                if (!b.key) b.key = kunciDari(e.target.value, i);
+                struktur[kunci] = daftar;
+              }
+            }),
+            el('button', {
+              class: 'tombol tombol-hantu tombol-kecil', type: 'button', style: 'flex-shrink:0;',
+              title: 'Naikkan',
+              onclick: () => {
+                if (i === 0) return;
+                [daftar[i - 1], daftar[i]] = [daftar[i], daftar[i - 1]];
+                struktur[kunci] = daftar; gambarDaftar();
+              }
+            }, '↑'),
+            el('button', {
+              class: 'tombol tombol-hantu tombol-kecil', type: 'button', style: 'flex-shrink:0;',
+              title: 'Turunkan',
+              onclick: () => {
+                if (i === daftar.length - 1) return;
+                [daftar[i + 1], daftar[i]] = [daftar[i], daftar[i + 1]];
+                struktur[kunci] = daftar; gambarDaftar();
+              }
+            }, '↓'),
+            el('button', {
+              class: 'tombol tombol-hantu tombol-kecil', type: 'button', style: 'flex-shrink:0;',
+              onclick: () => { daftar.splice(i, 1); struktur[kunci] = daftar; gambarDaftar(); }
+            }, ikon('tutup', 14))
+          ]),
+          pakaiDeskripsi ? el('input', {
+            value: b.deskripsi || '', placeholder: 'Pertanyaan pemandu untuk langkah ini (opsional)',
+            style: 'margin-top:6px;font-size:12.5px;',
+            oninput: (e) => { b.deskripsi = e.target.value; struktur[kunci] = daftar; }
+          }) : null
+        ])),
+        el('button', {
+          class: 'tombol tombol-sekunder tombol-kecil', type: 'button',
+          onclick: () => {
+            daftar.push({ key: '', label: '', ...(pakaiDeskripsi ? { deskripsi: '' } : {}) });
+            struktur[kunci] = daftar; gambarDaftar();
+          }
+        }, [ikon('tambah', 14), el('span', {}, ` Tambah ${labelItem}`)])
+      ]);
+    }
+    gambarDaftar();
+
+    return el('div', {}, [
+      el('div', { class: 'panel-info', style: 'margin-bottom:12px;' }, keterangan),
+      pakaiKolom ? el('div', { class: 'medan' }, [
+        el('label', {}, 'Jumlah Kolom'),
+        el('div', { class: 'keterangan', style: 'margin:0 0 6px;' },
+          'Kotak akan mengisi kisi berurutan dari kiri ke kanan. Kanvas Konsep Produk 4 kotak cukup 2 kolom.'),
+        el('select', {
+          style: 'width:120px;',
+          onchange: (e) => { struktur.kolom_kanvas = Number(e.target.value); }
+        }, [1, 2, 3, 4, 5].map(n => el('option', {
+          value: n, selected: (Number(struktur.kolom_kanvas) || 2) === n
+        }, `${n} kolom`)))
+      ]) : null,
+      el('div', { class: 'medan' }, [
+        el('label', {}, label),
+        area
+      ])
     ]);
   }
 
@@ -341,6 +489,15 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
         kunci: 'pertanyaan', label: 'Daftar Pertanyaan Tetap (opsional)',
         placeholder: 'Pertanyaan wawancara'
       }));
+    } else if (tipe === 'periksa') {
+      isiTipe.push(el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+        'Tiap langkah menjadi satu baris, dan tiap anggota kelompok mendapat kolom centangnya sendiri. ' +
+        'Murid hanya bisa mencentang kolom namanya sendiri, sehingga lembar ini terbaca sebagai bukti siapa mengerjakan apa. ' +
+        'Pada lembar mandiri, kolomnya satu saja.'));
+      isiTipe.push(daftarTeks({
+        kunci: 'butir_periksa', label: 'Daftar Langkah',
+        placeholder: 'mis. Membuat repositori dari templat'
+      }));
     } else if (tipe === 'kesepakatan') {
       isiTipe.push(el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
         'Kosongkan untuk memakai tiga poin kesepakatan bawaan.'));
@@ -348,11 +505,23 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
         kunci: 'poin', label: 'Poin Kesepakatan',
         placeholder: 'Poin yang disepakati bersama', banyakBaris: true
       }));
+    } else if (tipe === 'kanvas') {
+      isiTipe.push(bagianBernama({
+        kunci: 'blok', label: 'Kotak Kanvas', labelItem: 'Kotak',
+        pakaiKolom: true,
+        keterangan: 'Kosongkan daftar untuk memakai 9 blok Business Model Canvas standar beserta tata letak bakunya. ' +
+          'Begitu Anda menambah kotak sendiri, kanvas memakai tata letak mengalir sesuai jumlah kolom di bawah — ' +
+          'itulah yang dipakai untuk kanvas selain BMC, mis. Kanvas Konsep Produk 4 kotak.'
+      }));
+    } else if (tipe === 'tahapan') {
+      isiTipe.push(bagianBernama({
+        kunci: 'tahap', label: 'Langkah', labelItem: 'Langkah',
+        pakaiDeskripsi: true,
+        keterangan: 'Kosongkan daftar untuk memakai 5 tahap Design Thinking standar (Empathize hingga Test). ' +
+          'Isi sendiri untuk bentuk lain, mis. alur pengguna 4 langkah.'
+      }));
     } else if (PUNYA_BAWAAN[tipe]) {
-      isiTipe.push(el('div', { class: 'panel-info' },
-        tipe === 'kanvas'
-          ? 'Tipe Kanvas memakai 9 blok Business Model Canvas standar. Untuk menyusun blok sendiri, gunakan mode lanjutan.'
-          : 'Tipe Tahapan memakai 5 tahap Design Thinking standar (Empathize hingga Test). Untuk mengubahnya, gunakan mode lanjutan.'));
+      isiTipe.push(el('div', { class: 'panel-info' }, 'Tipe ini memakai bentuk bawaannya.'));
     } else {
       isiTipe.push(bagianMedan());
     }
@@ -388,7 +557,7 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
       }
       // Buang entri kosong agar struktur tetap bersih.
       const bersih = JSON.parse(JSON.stringify(struktur));
-      for (const k of ['kolom', 'butir', 'poin', 'pertanyaan']) {
+      for (const k of ['kolom', 'butir', 'poin', 'pertanyaan', 'butir_periksa']) {
         if (Array.isArray(bersih[k])) {
           bersih[k] = bersih[k].filter(x => String(x).trim() !== '');
           if (bersih[k].length === 0) delete bersih[k];
@@ -396,11 +565,38 @@ export function buatPembangunLembar(tipeAwal, strukturAwal = {}) {
       }
       if (Array.isArray(bersih.medan)) {
         bersih.medan = bersih.medan.filter(m => (m.label || '').trim() !== '');
+        for (const m of bersih.medan) {
+          if (m.tipe !== 'pilihan' && m.tipe !== 'pilihan_ganda') {
+            // Bekas pilihan dari tipe sebelumnya dibuang agar struktur bersih.
+            delete m.opsi; delete m.lain_lain;
+            continue;
+          }
+          m.opsi = (m.opsi || []).map(o => String(o).trim()).filter(Boolean);
+          if (!m.lain_lain) delete m.lain_lain;
+        }
         if (bersih.medan.length === 0) delete bersih.medan;
       }
       if (Array.isArray(bersih.klaster)) {
         bersih.klaster = bersih.klaster.filter(k => (k.kode || k.nama) && (k.butir || []).length > 0);
         if (bersih.klaster.length === 0) delete bersih.klaster;
+      }
+      // Kanvas & Tahapan: buang bagian tanpa nama, dan pastikan tiap bagian
+      // punya kunci data. Tanpa kunci, jawaban murid tidak punya tempat
+      // tersimpan dan hilang tanpa pesan.
+      for (const k of ['blok', 'tahap']) {
+        if (!Array.isArray(bersih[k])) continue;
+        bersih[k] = bersih[k].filter(b => String(b.label || '').trim() !== '');
+        const terpakai = new Set();
+        bersih[k].forEach((b, i) => {
+          let kunci = String(b.key || '').trim()
+            || String(b.label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24)
+            || `b${i + 1}`;
+          // Dua label yang menghasilkan kunci sama akan saling menimpa.
+          while (terpakai.has(kunci)) kunci += '_2';
+          terpakai.add(kunci);
+          b.key = kunci;
+        });
+        if (bersih[k].length === 0) { delete bersih[k]; if (k === 'blok') delete bersih.kolom_kanvas; }
       }
       if (Array.isArray(bersih.kolom_terhitung)) {
         bersih.kolom_terhitung = bersih.kolom_terhitung.filter(t => (t.dari || []).length > 0);

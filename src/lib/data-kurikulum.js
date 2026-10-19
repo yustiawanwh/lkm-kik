@@ -214,6 +214,7 @@ export const LABEL_TIPE_LEMBAR = {
   kanvas: 'Kanvas (mis. BMC)', tahapan: 'Tahapan (mis. Design Thinking)',
   kalkulator: 'Kalkulator Keuangan', instrumen: 'Instrumen Wawancara',
   likert: 'Instrumen Berskala (Likert)',
-  kesepakatan: 'Kesepakatan Kelompok', sejawat: 'Penilaian Sejawat',
+  kesepakatan: 'Kesepakatan Kelompok', periksa: 'Daftar Periksa (per anggota)',
+  sejawat: 'Penilaian Sejawat',
   refleksi: 'Refleksi', sikap: 'Observasi Sikap'
 };

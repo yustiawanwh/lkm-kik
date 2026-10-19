@@ -455,6 +455,72 @@ input[type="file"] {
   border-radius: var(--radius-sm); padding: 8px 10px;
 }
 
+/* ============ Peran kelompok per TP ============ */
+.panel-peran { border-color: var(--garis); }
+.panel-peran summary { cursor: pointer; list-style: none; }
+.panel-peran summary::-webkit-details-marker { display: none; }
+.panel-peran summary::before { content: '▸ '; color: var(--abu-teks); }
+.panel-peran[open] summary::before { content: '▾ '; }
+
+/* ============ Medan pilihan pada Formulir ============ */
+.daftar-pilihan { display: flex; flex-direction: column; gap: 4px; }
+.baris-pilihan {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 10px; border: 1px solid var(--garis-halus);
+  border-radius: var(--radius-sm); background: var(--permukaan);
+  cursor: pointer; font-size: 13.5px; line-height: 1.45;
+}
+.baris-pilihan:hover { border-color: var(--garis); background: var(--permukaan-2); }
+.baris-pilihan input { flex-shrink: 0; margin-top: 2px; width: auto; }
+/* Teks pilihan sering berupa kalimat penuh (mis. "Ya, bisa dibuat dengan
+   alat yang ada") — tanpa ini ujungnya terpotong di layar sempit. */
+.baris-pilihan span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.baris-pilihan.pilihan-baca { cursor: default; background: var(--permukaan-2); }
+.baris-pilihan.pilihan-baca:hover { border-color: var(--garis-halus); }
+
+/* ============ Penanda simpan luring ============ */
+.penanda-luring {
+  position: fixed; left: 14px; bottom: 14px; z-index: 60;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .14);
+  max-width: calc(100vw - 28px);
+}
+.penanda-luring[hidden] { display: none; }
+.penanda-luring.luring-tertunda { background: var(--kuning-lembut); color: var(--kuning-teks); }
+.penanda-luring.luring-mati { background: var(--merah-lembut); color: var(--merah-teks); }
+.titik-luring {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; flex-shrink: 0;
+  animation: denyut-luring 1.4s ease-in-out infinite;
+}
+@keyframes denyut-luring { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+/* Pengguna yang memilih mengurangi gerak tidak perlu titik berdenyut. */
+@media (prefers-reduced-motion: reduce) { .titik-luring { animation: none; } }
+/* Jangan ikut tercetak. */
+@media print { .penanda-luring { display: none !important; } }
+
+/* ============ Daftar Periksa per anggota ============ */
+.tabel-periksa { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tabel-periksa th, .tabel-periksa td {
+  border-bottom: 1px solid var(--garis-halus); padding: 7px 8px; vertical-align: top;
+}
+.tabel-periksa th {
+  font-size: 12px; color: var(--abu-teks); font-weight: 650;
+  border-bottom-width: 2px; border-bottom-color: var(--garis);
+}
+/* Nama anggota bisa panjang; kolomnya dibatasi agar kolom "Langkah" tetap
+   mendapat ruang terbanyak, dan namanya dipotong dengan elipsis bukan
+   melebarkan tabel sampai perlu digeser. */
+.tabel-periksa .kolom-centang {
+  width: 86px; text-align: center;
+  max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tabel-periksa td { overflow-wrap: anywhere; }
+.tabel-periksa input[type="checkbox"] { width: auto; cursor: pointer; }
+.tabel-periksa input[type="checkbox"]:disabled { cursor: default; opacity: .45; }
+
 /* ============ Pembandingan jawaban teks ============ */
 .banding-teks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .kotak-teks-banding {
@@ -734,6 +800,17 @@ input[type="file"] {
     display: block; font-weight: 600; font-size: 9.5pt;
     color: #333; margin-bottom: 2px;
   }
+  /* Baris pilihan juga sebuah <label>, jadi aturan label di atas akan
+     membuatnya tebal dan kelabu seperti judul pertanyaan. Dikembalikan ke
+     bentuk sebaris: tanda ☑/☐ di kiri, teks pilihan di sebelahnya. */
+  #area-cetak .medan label.baris-pilihan {
+    display: flex; gap: 6px; align-items: baseline;
+    font-weight: 400; font-size: 10pt; color: #000;
+    border: none; padding: 1px 0; margin: 0; background: none !important;
+  }
+  #area-cetak .medan label.baris-pilihan span { flex: 1; }
+  #area-cetak .daftar-pilihan { margin-bottom: 2px; }
+
   /* Isian formulir diberi garis bawah agar batas jawabannya jelas di kertas. */
   #area-cetak .medan .cetak-isian {
     border-bottom: 1px solid #bbb; padding-bottom: 3px; min-height: 16px;

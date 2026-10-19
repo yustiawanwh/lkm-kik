@@ -5,12 +5,13 @@ import { ikon, ikonTeks } from '../lib/ikon.js';
 import { pesanGalat } from '../lib/kesalahan.js';
 import { renderShell } from '../lib/shell.js';
 import { ambilPenugasan, ambilKelompokSaya } from '../lib/data-papan.js';
-import { ambilLembar, ambilAtauBuatIsian, perbaruiSel, timpaData, anggotaKelompokLembar, misiPenaut } from '../lib/data-lembar.js';
+import { ambilLembar, ambilAtauBuatIsian, anggotaKelompokLembar, misiPenaut } from '../lib/data-lembar.js';
+import { simpanSel, simpanTimpa, terapkanTertunda } from '../lib/simpan-luring.js';
 import { bergabungSaluranLembar } from '../lib/realtime-lembar.js';
 import { pasangPenyiarFokus, bacaPemakaiSel, gambarJejakSel } from '../lib/jejak-sel.js';
 import { terapkanNilaiJauh, atributJalur } from '../lib/jalur-sel.js';
 import { selTeks } from '../lib/sel-teks.js';
-import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung } from '../lib/lembar-tipe-khas.js';
+import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung, gambarPeriksa, gambarFormulirUmum } from '../lib/lembar-tipe-khas.js';
 import { state } from '../main.js';
 
 const JEDA_KETIK_MS = 500; // debounce sebelum menyimpan ke database
@@ -109,6 +110,9 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
   // Tulisan pertama dikirim utuh agar induk jalur bertingkat terbentuk;
   // jsonb_set tidak bisa membuat induk yang belum ada. Lihat catatan
   // lengkapnya di src/lib/lembar-widget.js.
+  // Pekerjaan yang belum terkirim karena jaringan mati ditempelkan kembali
+  // ke data dari server, supaya murid tidak melihat lembarnya kosong lagi.
+  if (isian?.id) isian.data = terapkanTertunda(isian.id, isian.data || {});
   let indukSiap = !!isian?.data && Object.keys(isian.data).length > 0;
 
   function ubahSel(path, nilai) {
@@ -118,8 +122,8 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     clearTimeout(waktuDebounce[kunci]);
     waktuDebounce[kunci] = setTimeout(async () => {
       try {
-        if (!indukSiap) { await timpaData(isian.id, isian.data); indukSiap = true; }
-        else { await perbaruiSel(isian.id, path, nilai); }
+        if (!indukSiap) { await simpanTimpa(isian.id, isian.data); indukSiap = true; }
+        else { await simpanSel(isian.id, path, nilai); }
       } catch (err) { roti(pesanGalat(err), 'galat'); }
     }, JEDA_KETIK_MS);
   }
@@ -133,7 +137,7 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     const baris = isian.data.baris || [];
     baris.push({});
     isian.data.baris = baris;
-    try { isian = await timpaData(isian.id, isian.data); render(); }
+    try { await simpanTimpa(isian.id, isian.data); render(); }
     catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 
@@ -141,7 +145,7 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     const baris = isian.data.baris || [];
     baris.splice(indeks, 1);
     isian.data.baris = baris;
-    try { isian = await timpaData(isian.id, isian.data); render(); }
+    try { await simpanTimpa(isian.id, isian.data); render(); }
     catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 
@@ -176,21 +180,16 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     ]);
   }
 
+  /** Memakai perender BERSAMA dengan dialog misi. Dulu halaman ini punya
+   *  salinan sendiri, sehingga tambahan seperti medan pilihan hanya muncul
+   *  di salah satu jalur saja. */
   function gambarFormulir() {
-    const medanList = lembar.struktur?.medan?.length ? lembar.struktur.medan : [{ key: 'catatan', label: 'Catatan', tipe: 'textarea' }];
-    return el('div', {}, medanList.map(m => {
-      const path = [m.key];
-      const tag = m.tipe === 'textarea' ? 'textarea' : 'input';
-      return el('div', { class: 'medan' }, [
-        el('label', {}, m.label || m.key),
-        el(tag, {
-          id: idInput(path), ...atributJalur(path),
-          value: tag === 'input' ? getNilaiPath(isian.data, path) : undefined,
-          oninput: (e) => ubahSel(path, e.target.value),
-          onfocus: () => fokusSel(path)
-        }, tag === 'textarea' ? getNilaiPath(isian.data, path) : undefined)
-      ]);
-    }));
+    return gambarFormulirUmum({
+      struktur: lembar.struktur, data: isian.data,
+      bisaEdit: !misiTertaut, onUbah: ubahSel,
+      sidik: isian?.id || 'lepas',
+      atributTambahan: (path) => ({ id: idInput(path), onfocus: () => fokusSel(path) })
+    });
   }
 
   function ubahSelDanRender(path, nilai) {
@@ -212,6 +211,7 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
       case 'kalkulator': return gambarKalkulator(props);
       case 'instrumen': return gambarInstrumen(props);
       case 'kesepakatan': return gambarKesepakatan({ ...props, onUbah: ubahSelDanRender, profil, anggotaKelompok });
+      case 'periksa': return gambarPeriksa({ ...props, profil, anggotaKelompok });
       case 'likert': return gambarLikert({ ...props, onUbah: ubahSelDanRender });
       case 'matriks': case 'daftar':
         return lembar.struktur?.kolom_terhitung?.length

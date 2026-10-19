@@ -7,12 +7,12 @@
 // ada di dialog misi), sehingga fitur andalan aplikasi tidak aktif di jalur
 // yang paling wajar dilalui.
 import { el, isi } from './dom.js';
-import { perbaruiSel, timpaData } from './data-lembar.js';
+import { simpanSel, simpanTimpa, terapkanTertunda } from './simpan-luring.js';
 import { atributJalur, terapkanNilaiJauh } from './jalur-sel.js';
 import { selTeks } from './sel-teks.js';
 import { bergabungSaluranLembar } from './realtime-lembar.js';
 import { pasangPenyiarFokus, bacaPemakaiSel, gambarJejakSel } from './jejak-sel.js';
-import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung } from './lembar-tipe-khas.js';
+import { gambarKanvas, gambarTahapan, gambarKalkulator, gambarInstrumen, gambarKesepakatan, gambarLikert, gambarMatriksTerhitung, gambarPeriksa, gambarFormulirUmum } from './lembar-tipe-khas.js';
 
 const JEDA_KETIK_MS = 500;
 
@@ -53,6 +53,15 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
   // berikutnya kembali memakai pembaruan per sel yang jauh lebih hemat.
   let indukSiap = sudahAdaIsi(isian.data);
 
+  // Pekerjaan yang belum terkirim karena jaringan mati ditempelkan kembali
+  // ke data yang baru dimuat. Tanpa ini murid melihat lembarnya KEMBALI
+  // KOSONG — pekerjaannya aman di antrean, tapi tidak terlihat, dan ia akan
+  // mengetiknya ulang.
+  if (isian?.id) {
+    isian.data = terapkanTertunda(isian.id, isian.data || {});
+    indukSiap = sudahAdaIsi(isian.data);
+  }
+
   function ubahSel(path, nilai) {
     setNilaiPath(isian.data, path, nilai);
     saluran?.siarkanSel(path, nilai);
@@ -60,11 +69,15 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
     clearTimeout(waktuDebounce[kunci]);
     waktuDebounce[kunci] = setTimeout(async () => {
       try {
+        // Penyimpanan lewat simpan-luring: kalau jaringan mati, pekerjaan
+        // masuk antrean dan dikirim sendiri saat tersambung lagi. Galat
+        // BUKAN jaringan (mis. lembar terkunci) tetap dilempar ke atas
+        // supaya murid diberi tahu.
         if (!indukSiap) {
-          await timpaData(isian.id, isian.data);
+          await simpanTimpa(isian.id, isian.data);
           indukSiap = true;
         } else {
-          await perbaruiSel(isian.id, path, nilai);
+          await simpanSel(isian.id, path, nilai);
         }
       } catch (err) { onSimpanGagal?.(err); }
     }, JEDA_KETIK_MS);
@@ -80,14 +93,14 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
     const baris = isian.data.baris || [];
     baris.push({});
     isian.data.baris = baris;
-    try { await timpaData(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
+    try { await simpanTimpa(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
   }
 
   async function hapusBaris(indeks) {
     const baris = isian.data.baris || [];
     baris.splice(indeks, 1);
     isian.data.baris = baris;
-    try { await timpaData(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
+    try { await simpanTimpa(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
   }
 
   function gambarMatriks() {
@@ -112,20 +125,10 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
   }
 
   function gambarFormulir() {
-    const medanList = lembar.struktur?.medan?.length ? lembar.struktur.medan : [{ key: 'catatan', label: 'Catatan', tipe: 'textarea' }];
-    return el('div', {}, medanList.map(m => {
-      const path = [m.key];
-      const tag = m.tipe === 'textarea' ? 'textarea' : 'input';
-      return el('div', { class: 'medan' }, [
-        el('label', {}, m.label || m.key),
-        el(tag, {
-          ...atributJalur(path),
-          value: tag === 'input' ? getNilaiPath(isian.data, path) : undefined,
-          disabled: !bisaEdit,
-          oninput: (e) => ubahSel(path, e.target.value)
-        }, tag === 'textarea' ? getNilaiPath(isian.data, path) : undefined)
-      ]);
-    }));
+    return gambarFormulirUmum({
+      struktur: lembar.struktur, data: isian.data, bisaEdit, onUbah: ubahSel,
+      sidik: isian.id || 'baru'
+    });
   }
 
   function gambarSesuaiTipe() {
@@ -136,6 +139,10 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
       case 'kalkulator': return gambarKalkulator(props);
       case 'instrumen': return gambarInstrumen(props);
       case 'kesepakatan': return gambarKesepakatan({ ...props, onUbah: ubahSelDanGambarUlang, profil, anggotaKelompok });
+      // Daftar Periksa memperbarui ringkasannya sendiri, jadi TIDAK digambar
+      // ulang — menggambar ulang akan mencabut fokus dari kotak centang yang
+      // baru ditekan.
+      case 'periksa': return gambarPeriksa({ ...props, profil, anggotaKelompok });
       case 'likert': return gambarLikert({ ...props, onUbah: ubahSelDanGambarUlang });
       case 'matriks': case 'daftar':
         // Kalau guru mendefinisikan kolom_terhitung, pakai perender yang

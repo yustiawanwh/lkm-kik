@@ -77,7 +77,15 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
             el('span', {}, 'Aktifkan Papan Tanggapan Pameran Gagasan')
           ]),
           el('div', { class: 'keterangan' },
-            'Murid dapat menanggapi karya kelompok LAIN dengan Pujian, Pertanyaan, atau Saran. Tidak bisa menanggapi kelompoknya sendiri.')
+            'Murid dapat menanggapi karya kelompok LAIN dengan Pujian, Pertanyaan, atau Saran. Tidak bisa menanggapi kelompoknya sendiri.'),
+          el('label', { style: 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px;' }, [
+            el('input', { type: 'checkbox', id: 'e-pameran-rotasi', checked: !!program.pameran_rotasi }),
+            el('span', {}, 'Pakai rotasi tetap antar kelompok (K1 → K2 → … → K1)')
+          ]),
+          el('div', { class: 'keterangan' },
+            'Tiap kelompok hanya menanggapi SATU kelompok, yaitu kelompok berikutnya menurut urutan pembuatan. ' +
+            'Dengan begini tidak ada kelompok yang tidak menerima tanggapan sama sekali, dan Anda bisa melihat ' +
+            'kelompok mana yang belum menjalankan tugasnya. Tanpa pilihan ini, murid bebas menanggapi kelompok mana pun.')
         ]),
         el('div', { class: 'medan' }, [
           el('label', {}, 'Indikator Observasi Sikap'),
@@ -123,6 +131,7 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
                   materi_awal: document.getElementById('e-materi').value.trim() || null,
                   wajib_diagnostik: document.getElementById('e-wajib-diagnostik').checked,
                   pameran_aktif: document.getElementById('e-pameran').checked,
+                  pameran_rotasi: document.getElementById('e-pameran-rotasi').checked,
                   skala_sikap: Number(document.getElementById('e-skala-sikap').value) || null,
                   // Label bebas diubah guru; kuncinya dibuat otomatis dari
                   // labelnya agar guru tidak perlu memikirkan nama teknis.
