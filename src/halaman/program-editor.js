@@ -633,7 +633,12 @@ export async function renderProgramEditor(root, { profil, onKeluar, programId })
       isi(areaRanah, daftar.map(k => {
         const nama = k.nama || '(tanpa nama)';
         if (!petaRanah.has(nama)) petaRanah.set(nama, k.ranah || 'kognitif');
-        if (!petaMisi.has(nama)) petaMisi.set(nama, []);
+        // Ikut membaca "misi" dari JSON yang ditempel guru, sama seperti
+        // "ranah" di baris atas. Sebelumnya dipaksa kosong, sehingga daftar
+        // misi yang sudah ditulis di JSON dibuang tanpa pesan saat disimpan —
+        // guru mengira sudah mengaturnya, padahal kriterianya tetap muncul
+        // di semua misi.
+        if (!petaMisi.has(nama)) petaMisi.set(nama, [...(k.misi || [])]);
         const terpilih = petaMisi.get(nama);
 
         return el('div', { class: 'kartu', style: 'padding:10px;margin-bottom:8px;background:var(--permukaan-2);' }, [
