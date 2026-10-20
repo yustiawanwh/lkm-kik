@@ -204,9 +204,14 @@ export const JENIS_DIAGNOSTIK = [
   { nilai: 'kognitif', label: 'Diagnostik Kognitif' }
 ];
 
+// DAFTAR INI yang menentukan isi dropdown tipe lembar, bukan LABEL_TIPE_LEMBAR
+// di bawahnya. Tipe baru harus ditambahkan di KEDUA tempat: di sini supaya
+// muncul sebagai pilihan, dan di peta label supaya ada namanya. Menambah
+// label saja membuat tipe itu tidak pernah terlihat guru.
 export const TIPE_LEMBAR = [
   'matriks', 'daftar', 'formulir', 'referensi', 'kanvas', 'tahapan',
-  'kalkulator', 'instrumen', 'likert', 'kesepakatan', 'sejawat', 'refleksi', 'sikap'
+  'kalkulator', 'instrumen', 'likert', 'kesepakatan', 'periksa',
+  'sejawat', 'refleksi', 'sikap'
 ];
 
 export const LABEL_TIPE_LEMBAR = {
