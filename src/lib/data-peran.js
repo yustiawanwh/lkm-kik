@@ -204,12 +204,14 @@ export const CONTOH_PERAN = {
     { nama: 'Penelaah Teknis', deskripsi: 'Menilai apakah gagasan bisa dikerjakan dengan alat yang ada.', label_catatan: '' },
     { nama: 'Juru Bicara', deskripsi: 'Memaparkan hasil kelompok saat pameran gagasan.', label_catatan: '' }
   ],
-  'Proyek Web GitHub (6 peran)': [
-    { nama: 'Pemilik Repositori', deskripsi: 'Membuat repositori dan mengundang anggota sebagai kolaborator.', label_catatan: 'Username GitHub' },
-    { nama: 'Manajer Issue', deskripsi: 'Membuka dan menutup Issue sesuai pembagian halaman.', label_catatan: 'Username GitHub' },
-    { nama: 'Perancang Antarmuka', deskripsi: 'Menyusun wireframe dan alur pengguna.', label_catatan: 'Username GitHub' },
-    { nama: 'Penulis Konten', deskripsi: 'Menulis README dan teks pada halaman.', label_catatan: 'Username GitHub' },
-    { nama: 'Pengelola Halaman', deskripsi: 'Menyalakan GitHub Pages dan memeriksa alamatnya.', label_catatan: 'Username GitHub' },
-    { nama: 'Pemeriksa Silang', deskripsi: 'Menelaah karya kelompok lain dan menulis tanggapannya.', label_catatan: 'Username GitHub' }
+  // Nama dan tugasnya mengikuti LKM TP 11.6 Bagian 2 apa adanya, supaya guru
+  // tidak perlu menerjemahkan ulang dari kertas ke layar.
+  'Proyek Web GitHub (6 peran) — TP 11.6': [
+    { nama: 'Pemandu Diskusi', deskripsi: 'Pemilik repository: membuatnya dari template, mengundang anggota, memastikan semua halaman masuk.', label_catatan: 'Username GitHub' },
+    { nama: 'Pencatat', deskripsi: 'Menyalin Kanvas Konsep Produk ke file README.md.', label_catatan: 'Username GitHub' },
+    { nama: 'Penjaga Waktu', deskripsi: 'Membuat Issues (satu tugas per halaman) dan memantau semuanya tertutup.', label_catatan: 'Username GitHub' },
+    { nama: 'Penanya Kritis', deskripsi: 'Peninjau: memberi komentar "Bagaimana jika …?" pada commit teman, mencocokkan dengan kanvas.', label_catatan: 'Username GitHub' },
+    { nama: 'Juru Bicara', deskripsi: 'Menulis tanggapan di repository kelompok peninjau dan menyampaikan konsep kelompok.', label_catatan: 'Username GitHub' },
+    { nama: 'Pengembang Front-End', deskripsi: 'Mengurus index.html dan style.css, menyalakan GitHub Pages, membantu teman yang macet.', label_catatan: 'Username GitHub' }
   ]
 };
