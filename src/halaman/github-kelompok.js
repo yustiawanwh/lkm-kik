@@ -9,7 +9,7 @@ import { ikon, ikonTeks } from '../lib/ikon.js';
 import { ambilPenugasan } from '../lib/data-papan.js';
 import { daftarKelompok } from '../lib/data-kelas.js';
 import {
-  daftarRepo, simpanRepo, simpanCuplikan, isianKelompok, usernameKelompok
+  daftarRepo, simpanRepo, simpanCuplikan, isianKelompok, usernameKelompok, cariAlamatRepo
 } from '../lib/data-github.js';
 import {
   ambilToken, simpanToken, adaToken, kuota,
@@ -104,24 +104,24 @@ export async function renderGithubKelompok(root, { profil, onKeluar, penugasanId
           el('button', {
             class: 'tombol tombol-sekunder tombol-kecil', style: 'margin-top:8px;',
             onclick: async (e) => {
-              // Alamatnya sudah ditulis murid di lembar Identitas. Membacanya
-              // dari sana jauh lebih cepat daripada guru menyalin 7 alamat.
+              // Alamatnya biasanya sudah ditulis murid, entah di lembar TP ini
+              // atau di TP sebelumnya. Menengok ke sana jauh lebih cepat
+              // daripada guru menyalin tujuh alamat satu per satu.
               e.currentTarget.disabled = true;
-              penanda.textContent = 'Mencari di lembar kerja kelompok…';
+              penanda.textContent = 'Mencari di lembar kerja dan TP lain…';
               try {
-                const semua = await isianKelompok(penugasanId, kelompok.id);
-                const teks = JSON.stringify(semua);
-                const ketemu = uraikanRepo(teks.match(/github\.com[/:][A-Za-z0-9._-]+\/[A-Za-z0-9._-]+/)?.[0] || '');
+                const ketemu = await cariAlamatRepo(penugasanId, kelompok.id, uraikanRepo);
                 if (ketemu) {
                   kotak.value = `${ketemu.pemilik}/${ketemu.nama}`;
-                  penanda.textContent = 'Ditemukan di lembar kerja kelompok ini.';
+                  penanda.textContent = `Ditemukan di ${ketemu.sumber}` +
+                    (ketemu.tp ? ` (${ketemu.tp})` : '') + '. Periksa dulu sebelum disimpan.';
                 } else {
-                  penanda.textContent = 'Tidak ada alamat GitHub di lembar kerja kelompok ini. Ketik manual.';
+                  penanda.textContent = 'Tidak ada alamat GitHub di lembar kerja kelompok ini maupun di TP lain. Ketik manual.';
                 }
               } catch (err) { penanda.textContent = pesanGalat(err); }
               finally { e.currentTarget.disabled = false; }
             }
-          }, 'Ambil dari Lembar Kerja')
+          }, 'Cari Otomatis')
         ]),
         el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;' }, [
           el('button', { class: 'tombol tombol-sekunder', onclick: () => tutup() }, 'Batal'),
@@ -171,6 +171,49 @@ export async function renderGithubKelompok(root, { profil, onKeluar, penugasanId
     } finally {
       sedangPeriksa = null;
     }
+  }
+
+  /** Isi alamat semua kelompok sekaligus dari lembar kerja dan TP lain.
+   *  Tidak memakai kuota GitHub sama sekali — hanya membaca Supabase. */
+  async function cariAlamatSemua() {
+    const kosong = kelompokList.filter(k => {
+      const r = repoUntuk(k.id);
+      return !(r?.pemilik && r?.nama);
+    });
+    if (kosong.length === 0) {
+      roti('Semua kelompok sudah punya alamat repositori.', 'info');
+      return;
+    }
+    const lonceng = roti('Mencari alamat…', 'info', 0);
+    let ketemu = 0;
+    const rinci = [];
+    for (const k of kosong) {
+      try {
+        const r = await cariAlamatRepo(penugasanId, k.id, uraikanRepo);
+        if (!r) continue;
+        await simpanRepo({ penugasanId, kelompokId: k.id, pemilik: r.pemilik, nama: r.nama });
+        ketemu++;
+        rinci.push(`${k.nama}: ${r.pemilik}/${r.nama} (${r.sumber})`);
+      } catch { /* kelompok ini dilewati, yang lain tetap diproses */ }
+    }
+    lonceng?.remove();
+    await muat();
+    if (ketemu === 0) {
+      roti('Tidak ada alamat GitHub yang bisa ditemukan di lembar kerja maupun TP lain.', 'info');
+      return;
+    }
+    // Hasilnya ditampilkan rinci, bukan sekadar "7 ketemu": alamat yang
+    // ditarik dari TP lain bisa saja repo lama, dan guru perlu melihatnya
+    // sebelum memeriksa.
+    dialog({
+      judul: `${ketemu} alamat ditemukan`,
+      isi: el('div', {}, [
+        el('div', { class: 'panel-info', style: 'margin-bottom:12px;' },
+          'Alamat yang berasal dari TP lain bisa jadi repositori lama. Periksa sekilas sebelum menekan Periksa.'),
+        el('div', { class: 'daftar-baris' }, rinci.map(t => el('div', { class: 'baris-item' },
+          el('div', { class: 'isi-utama' }, el('div', { class: 'judul-baris' }, t)))))
+      ])
+    });
   }
 
   async function periksaSemua() {
@@ -285,8 +328,7 @@ export async function renderGithubKelompok(root, { profil, onKeluar, penugasanId
       el('div', { class: 'judul-grup' }, [el('span', {}, 'Kontribusi Tiap Anggota')]),
       anggota.length === 0
         ? el('div', { class: 'panel-info', style: 'margin-bottom:14px;' },
-            'Username GitHub anggota belum terkumpul. Isi lewat menu Peran pada penugasan ini — ' +
-            'tiap peran punya kolom "Username GitHub" yang diisi pemegangnya. Tanpa itu, commit tidak bisa dicocokkan ke nama murid.')
+            'Kelompok ini belum punya anggota, jadi kontribusi tidak bisa dicocokkan ke nama murid.')
         : el('div', { style: 'overflow-x:auto;margin-bottom:14px;' }, [
             el('table', { class: 'tabel-periksa' }, [
               el('thead', {}, el('tr', {}, [
@@ -301,7 +343,9 @@ export async function renderGithubKelompok(root, { profil, onKeluar, penugasanId
                 el('td', {}, [
                   el('div', {}, (m.no_absen ? `${m.no_absen}. ` : '') + m.nama),
                   el('div', { style: 'font-size:11.5px;color:var(--abu-teks);' },
-                    m.username ? `@${m.username}` : 'username GitHub belum diisi')
+                    m.username
+                      ? `@${m.username}` + (m.dariTpLain ? ' · dari TP lain' : '')
+                      : 'username GitHub belum diisi')
                 ]),
                 el('td', { class: 'kolom-centang', style: m.commit === 0 ? 'color:var(--merah);font-weight:700;' : '' }, String(m.commit)),
                 el('td', { class: 'kolom-centang' }, String(m.bermakna)),
@@ -471,6 +515,8 @@ export async function renderGithubKelompok(root, { profil, onKeluar, penugasanId
             el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px;flex-wrap:wrap;' }, [
               el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: bukaDialogToken },
                 ikonTeks('gembok', adaToken() ? 'Ubah Token' : 'Pasang Token')),
+              el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: cariAlamatSemua },
+                ikonTeks('cari', 'Cari Alamat Otomatis')),
               el('button', { class: 'tombol tombol-primer tombol-kecil', onclick: periksaSemua },
                 ikonTeks('mulai', 'Periksa Semua'))
             ]),
