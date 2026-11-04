@@ -110,20 +110,43 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
   // Tulisan pertama dikirim utuh agar induk jalur bertingkat terbentuk;
   // jsonb_set tidak bisa membuat induk yang belum ada. Lihat catatan
   // lengkapnya di src/lib/lembar-widget.js.
+  // Bayangan isi server, diambil SEBELUM pekerjaan tertunda ditempelkan.
+  // Keputusan "per sel atau utuh" harus diambil per JALUR, bukan per isian:
+  // RPC menolak jalur yang induknya belum ada. Penjelasan lengkapnya di
+  // src/lib/lembar-widget.js.
+  let bayanganServer = JSON.parse(JSON.stringify(isian?.data || {}));
+
   // Pekerjaan yang belum terkirim karena jaringan mati ditempelkan kembali
   // ke data dari server, supaya murid tidak melihat lembarnya kosong lagi.
   if (isian?.id) isian.data = terapkanTertunda(isian.id, isian.data || {});
-  let indukSiap = !!isian?.data && Object.keys(isian.data).length > 0;
+  let perluUtuh = Object.keys(bayanganServer).length === 0;
+
+  function indukAdaDiServer(path) {
+    if (path.length < 2) return true;
+    let kursor = bayanganServer;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (kursor === null || typeof kursor !== 'object' || !(path[i] in kursor)) return false;
+      kursor = kursor[path[i]];
+    }
+    return kursor !== null && typeof kursor === 'object';
+  }
 
   function ubahSel(path, nilai) {
+    if (!indukAdaDiServer(path)) perluUtuh = true;
     setNilaiPath(isian.data, path, nilai);
     saluran?.siarkanSel(path, nilai);
     const kunci = path.join('.');
     clearTimeout(waktuDebounce[kunci]);
     waktuDebounce[kunci] = setTimeout(async () => {
       try {
-        if (!indukSiap) { await simpanTimpa(isian.id, isian.data); indukSiap = true; }
-        else { await simpanSel(isian.id, path, nilai); }
+        if (perluUtuh) {
+          await simpanTimpa(isian.id, isian.data);
+          perluUtuh = false;
+          bayanganServer = JSON.parse(JSON.stringify(isian.data));
+        } else {
+          await simpanSel(isian.id, path, nilai);
+          setNilaiPath(bayanganServer, path, nilai);
+        }
       } catch (err) { roti(pesanGalat(err), 'galat'); }
     }, JEDA_KETIK_MS);
   }
@@ -132,12 +155,19 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     saluran?.siarkanFokus(path);
   }
 
+  /** Perubahan STRUKTUR dikirim tanpa penggabungan — lihat simpan-luring.js. */
+  async function simpanStruktur() {
+    await simpanTimpa(isian.id, isian.data, { gabung: false });
+    bayanganServer = JSON.parse(JSON.stringify(isian.data));
+    perluUtuh = false;
+  }
+
   // ============ Baris dinamis (Matriks/Daftar) ============
   async function tambahBaris() {
     const baris = isian.data.baris || [];
     baris.push({});
     isian.data.baris = baris;
-    try { await simpanTimpa(isian.id, isian.data); render(); }
+    try { await simpanStruktur(); render(); }
     catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 
@@ -145,7 +175,7 @@ export async function renderLembarKerja(root, { profil, onKeluar, penugasanId, l
     const baris = isian.data.baris || [];
     baris.splice(indeks, 1);
     isian.data.baris = baris;
-    try { await simpanTimpa(isian.id, isian.data); render(); }
+    try { await simpanStruktur(); render(); }
     catch (err) { roti(pesanGalat(err), 'galat'); }
   }
 

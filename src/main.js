@@ -33,6 +33,7 @@ import { renderPantau } from './halaman/pantau.js';
 import { renderObrolan } from './halaman/obrolan.js';
 import { renderKartuAwal } from './halaman/kartu-awal.js';
 import { renderPeranTp } from './halaman/peran-tp.js';
+import { renderGithubKelompok } from './halaman/github-kelompok.js';
 import { mulaiSimpanLuring } from './lib/simpan-luring.js';
 import { mulaiPenandaLuring } from './lib/penanda-luring.js';
 
@@ -85,6 +86,7 @@ const POLA_RUTE = [
   '#/profil',
   '#/guru/kartu/:penugasanId',
   '#/guru/peran/:penugasanId',
+  '#/guru/github/:penugasanId',
   '#/obrolan/:kanalId',
   '#/obrolan'
 ];
@@ -161,6 +163,8 @@ async function route() {
     await renderKartuAwal(app, { ...konteks, penugasanId: params.penugasanId });
   } else if (pola === '#/guru/peran/:penugasanId') {
     await renderPeranTp(app, { ...konteks, penugasanId: params.penugasanId });
+  } else if (pola === '#/guru/github/:penugasanId') {
+    await renderGithubKelompok(app, { ...konteks, penugasanId: params.penugasanId });
   } else if (pola === '#/obrolan' || pola === '#/obrolan/:kanalId') {
     await renderObrolan(app, { ...konteks, kanalId: params.kanalId || null });
   } else if (pola === '#/profil') {

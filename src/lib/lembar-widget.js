@@ -51,18 +51,44 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
   // Karena itu tulisan PERTAMA pada sebuah isian dikirim utuh lewat
   // timpaData, yang membentuk seluruh induknya sekaligus. Tulisan
   // berikutnya kembali memakai pembaruan per sel yang jauh lebih hemat.
-  let indukSiap = sudahAdaIsi(isian.data);
+  // BAYANGAN ISI SERVER — diambil SEBELUM pekerjaan tertunda ditempelkan,
+  // jadi isinya benar-benar yang sudah ada di sana. Dipakai untuk memutuskan
+  // satu tulisan cukup dikirim per sel atau harus utuh.
+  //
+  // Memutuskannya per ISIAN (dulu: "apakah datanya masih kosong?") tidak
+  // cukup. RPC perbarui_sel_lembar MENOLAK jalur yang induknya belum ada,
+  // karena jsonb_set hanya membuat kunci terakhir. Jadi lembar yang sudah
+  // berisi jawaban teks tetap menolak centang pertama pada cabang `pilihan`,
+  // `periksa`, `baris`, atau `butir` — jawabannya tertulis di layar, tetapi
+  // tidak pernah sampai ke server. Keputusannya harus per JALUR.
+  let bayanganServer = JSON.parse(JSON.stringify(isian.data || {}));
 
   // Pekerjaan yang belum terkirim karena jaringan mati ditempelkan kembali
   // ke data yang baru dimuat. Tanpa ini murid melihat lembarnya KEMBALI
   // KOSONG — pekerjaannya aman di antrean, tapi tidak terlihat, dan ia akan
   // mengetiknya ulang.
-  if (isian?.id) {
-    isian.data = terapkanTertunda(isian.id, isian.data || {});
-    indukSiap = sudahAdaIsi(isian.data);
+  if (isian?.id) isian.data = terapkanTertunda(isian.id, isian.data || {});
+
+  /** Apakah induk jalur ini sudah ada di server? Jalur satu tingkat selalu
+   *  boleh, karena jsonb_set bisa membuat kunci terakhir. */
+  function indukAdaDiServer(path) {
+    if (path.length < 2) return true;
+    let kursor = bayanganServer;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (kursor === null || typeof kursor !== 'object' || !(path[i] in kursor)) return false;
+      kursor = kursor[path[i]];
+    }
+    return kursor !== null && typeof kursor === 'object';
   }
 
+  // Menempel sampai pengiriman utuh benar-benar berhasil. Tanpa penanda ini,
+  // dua sel yang diisi berdekatan pada cabang yang sama bisa sama-sama
+  // memutuskan "induk belum ada", lalu yang satu terkirim sebagai sel dan
+  // ditolak karena pengiriman utuhnya belum selesai.
+  let perluUtuh = !sudahAdaIsi(bayanganServer);
+
   function ubahSel(path, nilai) {
+    if (!indukAdaDiServer(path)) perluUtuh = true;
     setNilaiPath(isian.data, path, nilai);
     saluran?.siarkanSel(path, nilai);
     const kunci = path.join('.');
@@ -73,11 +99,13 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
         // masuk antrean dan dikirim sendiri saat tersambung lagi. Galat
         // BUKAN jaringan (mis. lembar terkunci) tetap dilempar ke atas
         // supaya murid diberi tahu.
-        if (!indukSiap) {
+        if (perluUtuh) {
           await simpanTimpa(isian.id, isian.data);
-          indukSiap = true;
+          perluUtuh = false;
+          bayanganServer = JSON.parse(JSON.stringify(isian.data));
         } else {
           await simpanSel(isian.id, path, nilai);
+          setNilaiPath(bayanganServer, path, nilai);
         }
       } catch (err) { onSimpanGagal?.(err); }
     }, JEDA_KETIK_MS);
@@ -89,18 +117,26 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
     gambarUlang();
   }
 
+  /** Perubahan STRUKTUR dikirim tanpa penggabungan: menghapus baris memang
+   *  berarti menggantikan isinya, dan penggabungan akan memunculkannya lagi. */
+  async function simpanStruktur() {
+    await simpanTimpa(isian.id, isian.data, { gabung: false });
+    bayanganServer = JSON.parse(JSON.stringify(isian.data));
+    perluUtuh = false;
+  }
+
   async function tambahBaris() {
     const baris = isian.data.baris || [];
     baris.push({});
     isian.data.baris = baris;
-    try { await simpanTimpa(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
+    try { await simpanStruktur(); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
   }
 
   async function hapusBaris(indeks) {
     const baris = isian.data.baris || [];
     baris.splice(indeks, 1);
     isian.data.baris = baris;
-    try { await simpanTimpa(isian.id, isian.data); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
+    try { await simpanStruktur(); gambarUlang(); } catch (err) { onSimpanGagal?.(err); }
   }
 
   function gambarMatriks() {
@@ -181,6 +217,15 @@ export function buatWidgetLembar({ lembar, isian, bisaEdit, onSimpanGagal, profi
       profil,
       onSelDiubah: ({ path, nilai }) => {
         setNilaiPath(isian.data, path, nilai);
+        // Anggota lain berhasil menulis jalur ini, berarti induknya kini ADA
+        // di server. Mencatatnya di bayangan mencegah kita mengirim seluruh
+        // objek data tanpa perlu.
+        setNilaiPath(bayanganServer, path, nilai);
+        // Daftar Periksa menghitung ringkasan "Budi: 4/6" saat digambar, jadi
+        // mencentang satu kotak dari jauh harus menggambar ulang — kalau
+        // tidak, kotaknya berubah tetapi angkanya tertinggal. Aman dilakukan
+        // karena tipe ini tidak punya isian teks yang bisa kehilangan fokus.
+        if (lembar.tipe === 'periksa') { gambarUlang(); return; }
         // Terapkan tepat ke selnya; kalau selnya tidak ada di layar (mis.
         // baris baru dari anggota lain), gambar ulang seluruh lembar.
         if (!terapkanNilaiJauh(wadah, path, nilai)) gambarUlang();

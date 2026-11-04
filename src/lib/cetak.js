@@ -9,6 +9,7 @@
 import { el, isi, tanggalId } from './dom.js';
 import { buatWidgetLembar } from './lembar-widget.js';
 import { isianUntukProgres } from './data-nilai.js';
+import { anggotaKelompokLembar } from './data-lembar.js';
 import { daftarLampiran } from './data-lampiran.js';
 import { urlBukti } from './bukti.js';
 
@@ -94,6 +95,12 @@ async function bagianSatuPekerjaan(p, rubrik) {
     ])
   ]));
 
+  // Daftar anggota dibutuhkan tipe Daftar Periksa (kolom per anggota).
+  // Tanpa ini hasil Lembar Kontrol tidak ikut tercetak sama sekali.
+  const anggota = p.kelompok_id
+    ? await anggotaKelompokLembar(p.kelompok_id).catch(() => [])
+    : [];
+
   // ---- Lembar kerja ----
   try {
     const daftarIsian = await isianUntukProgres(p);
@@ -105,7 +112,7 @@ async function bagianSatuPekerjaan(p, rubrik) {
         if (isian.id) {
           isiLembar = buatWidgetLembar({
             lembar, isian, bisaEdit: false, profil: null,
-            anggotaKelompok: [], tampilanGuru: true
+            anggotaKelompok: anggota, tampilanGuru: true
           }).elemen;
           ubahIsianJadiTeks(isiLembar);
         } else {

@@ -5,6 +5,7 @@ import { el, isi, dialog } from './dom.js';
 import { pesanGalat } from './kesalahan.js';
 import { buatWidgetLembar } from './lembar-widget.js';
 import { isianUntukProgres } from './data-nilai.js';
+import { anggotaKelompokLembar } from './data-lembar.js';
 import { daftarLampiran } from './data-lampiran.js';
 import { ambilRefleksi, promptRefleksiProgram, refleksiPerTahap } from './data-asesmen.js';
 import { supabase } from './supabase.js';
@@ -21,6 +22,14 @@ export function buatPanelPekerjaan(progres) {
   (async () => {
     const bagian = [el('div', { style: 'font-weight:700;font-size:13px;margin-bottom:8px;' }, 'Hasil Pekerjaan Murid')];
 
+    // Daftar anggota dibutuhkan tipe Daftar Periksa, yang kolomnya satu per
+    // anggota. Tanpa ini guru hanya melihat pesan "belum tersedia" — seluruh
+    // hasil Lembar Kontrol tidak terbaca justru di halaman penilaian.
+    let anggota = [];
+    if (progres.kelompok_id) {
+      anggota = await anggotaKelompokLembar(progres.kelompok_id).catch(() => []);
+    }
+
     // ---- Lembar kerja (hanya-baca) ----
     try {
       const daftarIsian = await isianUntukProgres(progres);
@@ -33,7 +42,7 @@ export function buatPanelPekerjaan(progres) {
             el('div', { style: 'font-size:12px;font-weight:600;color:var(--abu-teks);margin-bottom:6px;' },
               `${lembar.kode} — ${lembar.judul}` + (pemilik ? ` · ${pemilik}` : '')),
             isian.id
-              ? buatWidgetLembar({ lembar, isian, bisaEdit: false, profil: null, anggotaKelompok: [], tampilanGuru: true }).elemen
+              ? buatWidgetLembar({ lembar, isian, bisaEdit: false, profil: null, anggotaKelompok: anggota, tampilanGuru: true }).elemen
               : el('div', { style: 'font-size:13px;color:var(--abu-teks);' }, 'Belum diisi.')
           ]));
         }

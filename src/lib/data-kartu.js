@@ -184,6 +184,15 @@ export function bacaIsianTerbaca(lembar, data) {
     }
   }
 
+  // Kanvas dan Tahapan menyimpan jawabannya di kunci tingkat atas, dan
+  // kuncinya dibuat otomatis dari label ("nilai", "l1"). Tanpa pemetaan ini
+  // guru melihat kunci mentah itu alih-alih bunyi pertanyaannya — persis
+  // keluhan yang dulu membuat bahan Kartu Awal tidak berguna.
+  const petaLabel = new Map([
+    ...(st.blok || []).map(b => [b.key, b.label]),
+    ...(st.tahap || []).map(t => [t.key, t.label])
+  ]);
+
   // Sisa kunci yang belum tertangani (kanvas, tahapan, instrumen).
   const sudah = new Set([
     ...(st.medan || []).map(m => m.key), 'baris', 'butir', 'pilihan', 'pilihan_lain', 'periksa'
@@ -192,7 +201,7 @@ export function bacaIsianTerbaca(lembar, data) {
     if (sudah.has(k)) continue;
     if (typeof v === 'object') continue;
     const t = bersih(v);
-    if (t) hasil.push({ label: k, teks: t });
+    if (t) hasil.push({ label: petaLabel.get(k) || k, teks: t });
   }
 
   return hasil;

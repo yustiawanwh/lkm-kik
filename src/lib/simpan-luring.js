@@ -103,10 +103,51 @@ export function galatJaringan(err) {
 
 // ---------- Pengiriman ----------
 
+/**
+ * Gabungkan `sumber` ke atas `sasaran`, bertingkat.
+ *
+ * Dipakai agar pekerjaan yang tertahan di antrean TIDAK MENGHAPUS pekerjaan
+ * anggota lain. Tanpa ini, satu anggota yang jaringannya mati sepuluh menit
+ * akan menimpa seluruh lembar kelompok begitu ia tersambung lagi — isinya
+ * memang salinan utuh lembar itu menurut keadaan sepuluh menit yang lalu.
+ *
+ * Larik digabung PER INDEKS, bukan diganti, karena tiap elemen baris matriks
+ * adalah objek sel: dua anggota yang mengisi baris berbeda harus sama-sama
+ * selamat.
+ */
+function gabungDalam(sasaran, sumber) {
+  if (Array.isArray(sumber)) {
+    const dasar = Array.isArray(sasaran) ? [...sasaran] : [];
+    sumber.forEach((nilai, i) => { dasar[i] = gabungDalam(dasar[i], nilai); });
+    return dasar;
+  }
+  if (sumber && typeof sumber === 'object') {
+    const dasar = (sasaran && typeof sasaran === 'object' && !Array.isArray(sasaran)) ? { ...sasaran } : {};
+    for (const [k, v] of Object.entries(sumber)) dasar[k] = gabungDalam(dasar[k], v);
+    return dasar;
+  }
+  // Nilai daun: yang dikirim murid menang. Untaian kosong pun menang, karena
+  // itulah cara kotak centang yang DILEPAS tersimpan.
+  return sumber;
+}
+
 async function kirim(p) {
   if (p.jenis === 'timpa') {
+    let isiKirim = p.data;
+
+    // Penulisan biasa digabung dengan keadaan server saat ini. Perubahan
+    // STRUKTUR (tambah/hapus baris) sengaja tidak digabung — menghapus baris
+    // memang berarti menggantikan isinya, dan penggabungan justru akan
+    // memunculkan kembali baris yang baru saja dihapus murid.
+    if (p.gabung) {
+      const { data: baris, error: eBaca } = await supabase
+        .from('isian_lembar').select('data').eq('id', p.isianId).maybeSingle();
+      if (eBaca) throw eBaca;
+      if (baris) isiKirim = gabungDalam(baris.data || {}, p.data || {});
+    }
+
     const { error } = await supabase.from('isian_lembar')
-      .update({ data: p.data }).eq('id', p.isianId);
+      .update({ data: isiKirim }).eq('id', p.isianId);
     if (error) throw error;
     return;
   }
@@ -210,9 +251,17 @@ export async function simpanSel(isianId, path, nilai) {
   }
 }
 
-export async function simpanTimpa(isianId, data) {
+/**
+ * Kirim seluruh objek data.
+ *
+ * @param {boolean} gabung  true untuk penulisan biasa — isinya digabung
+ *   dengan keadaan server supaya pekerjaan anggota lain tidak terhapus.
+ *   false HANYA untuk perubahan struktur (tambah/hapus baris), yang memang
+ *   bermaksud menggantikan.
+ */
+export async function simpanTimpa(isianId, data, { gabung = true } = {}) {
   // Snapshot: data bisa berubah lagi sebelum antrean terkirim.
-  const p = { jenis: 'timpa', isianId, data: JSON.parse(JSON.stringify(data ?? {})) };
+  const p = { jenis: 'timpa', isianId, gabung, data: JSON.parse(JSON.stringify(data ?? {})) };
   if (antrean.length > 0 || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
     antre(p); return 'antre';
   }

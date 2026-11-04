@@ -373,8 +373,25 @@ export function gambarPeriksa({ struktur, data, bisaEdit, onUbah, profil, anggot
       }).map(a => ({ id: a.murid_id, nama: a.profil?.nama || 'Murid' }))
     : (profil ? [{ id: profil.id, nama: profil.nama || 'Saya' }] : []);
 
+  // Siapa pun yang SUDAH mencentang harus ikut tampil, walau namanya tidak
+  // ada di daftar anggota yang dikirim pemanggil. Dua keadaan nyata:
+  // dialog penilaian guru (yang tidak membawa daftar anggota, sehingga dulu
+  // seluruh hasil Lembar Kontrol tidak terlihat sama sekali), dan anggota
+  // yang sudah keluar dari kelompok setelah terlanjur mencentang.
+  const sudahAda = new Set(orang.map(o => o.id));
+  for (const kolom of Object.values(data?.periksa || {})) {
+    for (const [muridId, nilai] of Object.entries(kolom || {})) {
+      if (!BENAR(nilai) || sudahAda.has(muridId)) continue;
+      sudahAda.add(muridId);
+      // Dinomori supaya dua kolom tak dikenal tidak tampak sebagai orang
+      // yang sama.
+      orang.push({ id: muridId, nama: `Anggota ${orang.length + 1}`, takDikenal: true });
+    }
+  }
+
   if (orang.length === 0) {
-    return el('div', { class: 'panel-info' }, 'Daftar anggota belum tersedia, jadi daftar periksa belum bisa ditampilkan.');
+    return el('div', { class: 'panel-info' },
+      'Belum ada satu pun langkah yang dicentang pada daftar periksa ini.');
   }
 
   const tercentang = (i, muridId) => BENAR(data?.periksa?.[String(i)]?.[muridId]);

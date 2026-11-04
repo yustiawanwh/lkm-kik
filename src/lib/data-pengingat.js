@@ -42,7 +42,11 @@ export async function hitungTunggakan(penugasanId) {
     else if (p.murid_id) selesaiMandiri.add(`${p.tugas_id}|${p.murid_id}`);
   }
 
-  return bahan.murid.map(m => {
+  // Murid yang pendaftarannya dinonaktifkan tidak boleh ditagih: RLS memang
+  // menutup penugasan ini untuk mereka (saya_murid_penugasan mensyaratkan
+  // d.aktif), jadi pengingatnya menyuruh mengerjakan sesuatu yang bahkan
+  // tidak bisa mereka buka.
+  return bahan.murid.filter(m => m.aktif !== false).map(m => {
     const kelompokId = kelompokMurid.get(m.id) || null;
     const belum = bahan.tugas.filter(t => {
       if (t.sifat_kerja === 'kelompok') {

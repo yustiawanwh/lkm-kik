@@ -29,7 +29,7 @@ export async function ambilBahanPantau(penugasanId) {
   if (eK) throw eK;
 
   const { data: pendaftaran, error: eD } = await supabase
-    .from('pendaftaran').select('murid_id, kendali, profil:murid_id(id, nama, no_absen)')
+    .from('pendaftaran').select('murid_id, aktif, kendali, profil:murid_id(id, nama, no_absen)')
     .eq('kelas_id', penugasan.kelas_id);
   if (eD) throw eD;
 
@@ -40,7 +40,7 @@ export async function ambilBahanPantau(penugasanId) {
   );
 
   const murid = pendaftaran
-    .map(p => ({ ...p.profil, kendali: p.kendali }))
+    .map(p => ({ ...p.profil, kendali: p.kendali, aktif: p.aktif !== false }))
     .sort((a, b) => (a.no_absen ?? 999) - (b.no_absen ?? 999) || (a.nama || '').localeCompare(b.nama || ''));
 
   return { penugasan, sprints, tugas, kelompok, murid, progres };

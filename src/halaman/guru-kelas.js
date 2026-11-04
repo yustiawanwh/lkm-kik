@@ -972,6 +972,7 @@ export async function renderGuruKelasDetail(root, { profil, onKeluar, kelasId })
                 el('div', { class: 'tombol-gugus' }, [
                   el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/kartu/${p.id}`) }, ikonTeks('catatan', 'Kartu Awal')),
                   el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/peran/${p.id}`) }, ikonTeks('kelas', 'Peran')),
+                  el('button', { class: 'tombol tombol-sekunder tombol-kecil', onclick: () => navigasi(`#/guru/github/${p.id}`) }, ikonTeks('berkas', 'GitHub')),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPengingat(p) }, ikonTeks('jam', 'Pengingat')),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogSusulan(p) }, ikonTeks('kalender', 'Susulan')),
                   el('button', { class: 'tombol tombol-hantu tombol-kecil', onclick: () => bukaDialogPenugasan(p) }, 'Ubah Tenggat'),
